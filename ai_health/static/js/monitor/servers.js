@@ -8,11 +8,12 @@ const ROLE = { server: "server", "router-child": "router instance", router: "rou
 function card(s) {
   const tp = s.throughput || {};
   const busy = !!tp.busy;
-  const hint = s.metrics_status === "disabled"
-    ? h("div", { class: "note" }, "Started without ", h("code", {}, "--metrics"), ": tokens/s is estimated from /slots. Add the flag for exact numbers.")
-    : s.health === "auth" || s.metrics_status === "auth"
-      ? h("div", { class: "note" }, "This server needs an API key, so its endpoints cannot be read.")
-      : s.health === "unreachable" ? h("div", { class: "note" }, `Not answering on port ${s.port}.`) : null;
+  const hint = s.auth && s.metrics_status !== "ok" && s.slots_status !== "ok"
+    ? h("div", { class: "note" }, "Started with ", h("code", {}, "--api-key"), ": its endpoints need the key, so tokens/s cannot be read. Memory and VRAM figures are still live.")
+    : s.health === "unreachable" ? h("div", { class: "note" }, `Not answering on port ${s.port}.`)
+      : s.metrics_status === "disabled"
+        ? h("div", { class: "note" }, "Started without ", h("code", {}, "--metrics"), ": tokens/s is live from /slots. Add the flag for the exact average per request.")
+        : null;
   const all = s.slots || [];
   const shown = all.filter((sl) => sl.busy || sl.n_prompt);
   const idle = all.length - shown.length;
@@ -26,9 +27,11 @@ function card(s) {
       used != null && sl.n_ctx ? h("div", { class: "faint" }, `context ${used} of ${sl.n_ctx} tokens`)
         : sl.n_ctx ? h("div", { class: "faint" }, `context ${sl.n_ctx}`) : "");
   });
-  const explore = s.model ? h("button", { class: "btn", onclick: () => {
-    store.set("exploreRequest", { path: s.model, pid: s.pid });
-  } }, "Explore this model") : null;
+  // cards are rebuilt every second: act on press so a rebuild between
+  // mousedown and mouseup cannot swallow the click; Enter/Space still work
+  const go = () => store.set("exploreRequest", { path: s.model, pid: s.pid });
+  const explore = s.model ? h("button", { class: "btn", onpointerdown: (e) => { if (e.button === 0) go(); },
+    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } } }, "Explore this model") : null;
   return h("div", { class: "panel server" },
     h("div", { class: "server-top" }, h("span", { class: "health", "data-s": s.health, title: `health: ${s.health}` }),
       h("h3", { title: s.model || "" }, s.name || basename(s.model)), h("span", { class: "grow" }),

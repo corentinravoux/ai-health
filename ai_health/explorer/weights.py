@@ -53,20 +53,21 @@ def _block_reduce(x: np.ndarray, factor: int, reduce: str) -> np.ndarray:
 
 
 def _stats(x: np.ndarray) -> dict[str, float]:
-    x64 = x.astype(np.float64, copy=False)
-    mean = float(x64.mean())
-    std = float(x64.std())
-    absx = np.abs(x64)
+    # float32 data, float64 accumulators: no full-size float64 copy
+    mean = float(x.mean(dtype=np.float64))
+    std = float(x.std(dtype=np.float64))
+    absx = np.abs(x)
     return {
-        "mean": mean, "std": std, "min": float(x64.min()), "max": float(x64.max()),
-        "absmax": float(absx.max()), "rms": float(np.sqrt((x64 ** 2).mean())),
+        "mean": mean, "std": std, "min": float(x.min()), "max": float(x.max()),
+        "absmax": float(absx.max()),
+        "rms": float(np.sqrt(np.square(x, dtype=np.float64).mean())),
         "near_zero_frac": float((absx < 0.01 * std + 1e-12).mean()),
-        "outlier_frac": float((np.abs(x64 - mean) > 6 * std).mean()) if std > 0 else 0.0,
+        "outlier_frac": float((np.abs(x - np.float32(mean)) > 6 * std).mean()) if std > 0 else 0.0,
     }
 
 
 def tensor_view(model: ModelInfo, name: str, reduce: str = "absmax", max_side: int = 512,
-                max_rows: int = 8192) -> TensorView:
+                max_rows: int = 8192, max_elems: int = 4_000_000) -> TensorView:
     if reduce not in ("absmax", "mean"):
         raise ValueError("reduce must be 'absmax' or 'mean'")
     info = model.tensor(name)
@@ -76,6 +77,8 @@ def tensor_view(model: ModelInfo, name: str, reduce: str = "absmax", max_side: i
     raw2 = raw.reshape(1, -1) if raw.ndim == 1 else raw.reshape(-1, raw.shape[-1])
     rows_total = raw2.shape[0]
     view.rows_total = rows_total
+    cols = int(info.shape[0]) if info.shape else 1
+    max_rows = max(1, min(max_rows, max_elems // max(1, cols)))  # bound memory, not just rows
     if rows_total > max_rows:
         idx = np.unique(np.linspace(0, rows_total - 1, max_rows).round().astype(np.int64))
         raw2 = raw2[idx]
@@ -121,18 +124,26 @@ class ViewCache:
         self.maxsize = maxsize
         self._d: OrderedDict = OrderedDict()
         self._lock = threading.Lock()
+        self._work = threading.Lock()
 
     def get(self, model: ModelInfo, name: str, reduce: str) -> TensorView:
+        """One dequantization at a time (memory), duplicates wait for the first."""
         key = (str(model.path), name, reduce)
         with self._lock:
             if key in self._d:
                 self._d.move_to_end(key)
                 return self._d[key]
-        v = tensor_view(model, name, reduce=reduce)
-        with self._lock:
-            self._d[key] = v
-            while len(self._d) > self.maxsize:
-                self._d.popitem(last=False)
+        with self._work:
+            with self._lock:
+                if key in self._d:  # computed while we waited
+                    return self._d[key]
+            import ai_health.explorer.weights as _w  # late lookup keeps it patchable
+
+            v = _w.tensor_view(model, name, reduce=reduce)
+            with self._lock:
+                self._d[key] = v
+                while len(self._d) > self.maxsize:
+                    self._d.popitem(last=False)
         return v
 
     def clear(self) -> None:

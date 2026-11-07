@@ -52,14 +52,16 @@ Keys: `1` monitor, `2` explorer. The theme toggle is in the left rail.
 | Number | Source |
 |---|---|
 | GPU, VRAM, per-process VRAM | NVML (`nvidia-ml-py`); falls back to `nvidia-smi` when the driver hides per-process memory |
-| RAM, swap, CPU, threads | `psutil`; per-process swap from `/proc/<pid>/smaps` |
+| RAM, swap, CPU, threads | `psutil`; per-process swap from `VmSwap` in `/proc/<pid>/status` |
 | Processes and flags | `llama`/`llama-*` executables; flags from `/proc/<pid>/cmdline` and `LLAMA_ARG_*` environment variables; the port from the listening socket (the default changed from 8080 to 9931 across llama.cpp versions) |
 | Tokens per second, live | `/slots`: tokens decoded between two samples, while a request is running |
 | Tokens per second, exact | `/metrics` (start llama-server with `--metrics`): decode tokens over decode time. llama-server only updates these counters when a request finishes, so the readout switches to this value at the end of each request |
 | Context fill | `/slots`: prompt tokens + tokens decoded, against the slot's `n_ctx` |
 
-The app samples once per second, keeps 15 minutes of history in memory, and
-uses about 3 % of one CPU core and ~50 MB of RAM. Probes to llama-server time
+The app samples once per second and keeps 15 minutes of history in memory.
+With a model loaded, one sample costs about 20 ms of CPU (2 % of one core,
+0.2 % of a 12-thread CPU) and the backend holds ~50 MB of RAM; swap is read
+from `/proc/<pid>/status`, not from smaps, which would cost ~165 ms per sample. Probes to llama-server time
 out after 300 ms, so a busy server never stalls the monitor.
 
 ## Placement overlay
@@ -86,8 +88,10 @@ layers llama.cpp reported ("offloaded 12/37 layers"), and an estimate of
 
 ## Weight inspector
 
-Tensors are memory-mapped and dequantized one at a time with `gguf-py`. Large
-tensors are row-sampled (8192 rows at most) and every heatmap is reduced to
+Tensors are memory-mapped and dequantized one at a time with `gguf-py`
+(requests are serialised and duplicates share one result). Large tensors are
+row-sampled (at most 8192 rows and 4 M values, about 60 MB of working memory)
+and every heatmap is reduced to
 at most 512 × 512 cells, as the largest |w| or the signed mean per cell.
 Quantization types that `gguf-py` cannot dequantize are reported instead of
 drawn.

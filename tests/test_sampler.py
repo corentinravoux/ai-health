@@ -62,7 +62,7 @@ def make(procs=(), gpu=None, **kw):
     clock = Clock()
     plist = list(procs)
     s = Sampler(gpu or FakeGpu(), system=fake_system,
-                find_procs=lambda: find_llama_processes(plist),
+                find_procs=lambda: find_llama_processes(plist, read_status=lambda pr: pr.status_text()),
                 probe_factory=FakeProbe, clock=clock, name_map=lambda pids: {p: f"p{p}" for p in pids},
                 **kw)
     return s, clock, plist
@@ -231,7 +231,7 @@ def test_slot_summary_handles_list_form_and_prompt_tokens(fakes_dir):
             return ProbeResult(True, "ok", data)
 
     clock = Clock()
-    s = Sampler(FakeGpu(), system=fake_system, find_procs=lambda: find_llama_processes([server()]),
+    s = Sampler(FakeGpu(), system=fake_system, find_procs=lambda: find_llama_processes([server()], read_status=lambda pr: pr.status_text()),
                 probe_factory=ListProbe, clock=clock, name_map=lambda pids: {})
     [sl] = s.tick()["servers"][0]["slots"]
     assert sl == {"id": 0, "n_ctx": 32768, "busy": True, "n_decoded": 25, "n_prompt": 309}
@@ -247,3 +247,30 @@ def test_vanished_server_listed_as_stopped_for_a_while():
     assert gone["pid"] == 10 and gone["stopped_at"] == 1.0 and gone["name"] == "a.gguf"
     clock.t = 200.0
     assert s.tick()["stopped"] == []
+
+
+def test_api_key_server_reports_auth_not_metrics_off():
+    class AuthProbe(FakeProbe):
+        def slots(self):
+            return ProbeResult(False, "auth", detail="authentication required (--api-key)")
+
+    clock = Clock()
+    p = server(extra=["--api-key", "secret"])
+    s = Sampler(FakeGpu(), system=fake_system, find_procs=lambda: find_llama_processes([p], read_status=lambda pr: pr.status_text()),
+                probe_factory=AuthProbe, clock=clock, name_map=lambda pids: {})
+    sample = s.tick()
+    c = codes(sample)
+    assert ("warn", "server_auth") in c
+    assert not any(code == "metrics_off" for _, code in c)
+    assert sample["servers"][0]["auth"] is True
+
+
+def test_block_count_without_full_reader(make_gguf, monkeypatch):
+    import gguf
+
+    from ai_health.sampler import block_count_of
+
+    path = make_gguf(n_layer=7, vocab=5000)
+    monkeypatch.setattr(gguf, "GGUFReader", lambda *a, **k: pytest.fail("full reader used"))
+    assert block_count_of(str(path)) == 7
+    assert block_count_of(None) is None

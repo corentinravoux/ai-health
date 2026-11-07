@@ -71,3 +71,15 @@ def test_close_shuts_down():
     g = GpuCollector(nvml=nv)
     g.close()
     assert nv.shutdown_called
+
+
+def test_runtime_nvml_failure_marks_unavailable():
+    nv = FakeNVML()
+    g = GpuCollector(nvml=nv)
+
+    def boom(h):
+        raise nv.NVMLError("GPU is lost")
+
+    nv.nvmlDeviceGetMemoryInfo = boom
+    assert g.sample() == []
+    assert g.available is False and "GPU is lost" in g.reason
