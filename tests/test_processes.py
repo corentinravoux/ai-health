@@ -63,3 +63,12 @@ def test_vanished_process_is_skipped():
 
     procs = [Gone(60, 1, "llama-server", []), FakeProc(61, 1, "llama-cli", ["llama-cli"])]
     assert [p.pid for p in find_llama_processes(procs)] == [61]
+
+
+def test_name_gate_skips_cmdline_of_unrelated_processes():
+    class NoCmdline(FakeProc):
+        def cmdline(self):
+            raise AssertionError("cmdline read for an unrelated process")
+
+    procs = [NoCmdline(70, 1, "bash", ["bash"]), FakeProc(71, 1, "llama-server", [BIN + "llama-server"])]
+    assert [p.pid for p in find_llama_processes(procs)] == [71]
