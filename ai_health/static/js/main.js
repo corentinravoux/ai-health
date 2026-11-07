@@ -64,7 +64,7 @@ async function initViews() {
       const mod = await import(path);
       mod.mount(document.getElementById(id));
     } catch (e) {
-      console.error(`view ${id}`, e);
+      console.error(`view ${id}: ${e?.stack || e}`);
     }
   }
 }
