@@ -180,4 +180,5 @@ def build_architecture(model: ModelInfo) -> dict:
         "block": {"kind": "transformer", "hybrid": hybrid, "groups": template,
                   "residuals": [["input", "attention"], ["attention", "ffn"]]},
         "layers": layers, "head": head, "extras": extras, "summary": summary,
+        "metadata": model.metadata,
     }

@@ -27,17 +27,69 @@ STOPPED_KEEP_S = 60
 SWAP_DANGER = 512 * MiB  # a little old swap is normal; this much hurts tokens/s
 
 
+_SCALAR = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?",
+           10: "<Q", 11: "<q", 12: "<d"}  # GGUF value types (8 = string, 9 = array)
+
+
+def _read_kv(fh, want: set[str]) -> dict:
+    """Walk the GGUF key/value section, skipping values we do not need,
+    and stop once every wanted key is found (no tensor table, no arrays)."""
+    import struct
+
+    def rd(fmt):
+        n = struct.calcsize(fmt)
+        return struct.unpack(fmt, fh.read(n))[0]
+
+    def skip(vtype):
+        if vtype == 8:
+            fh.seek(rd("<Q"), 1)
+        elif vtype == 9:
+            itype, count = rd("<I"), rd("<Q")
+            if itype == 8:
+                for _ in range(count):
+                    fh.seek(rd("<Q"), 1)
+            elif itype == 9:
+                for _ in range(count):
+                    skip(9)
+            else:
+                fh.seek(struct.calcsize(_SCALAR[itype]) * count, 1)
+        else:
+            fh.seek(struct.calcsize(_SCALAR[vtype]), 1)
+
+    if fh.read(4) != b"GGUF":
+        return {}
+    rd("<I")  # version
+    rd("<Q")  # tensor count
+    n_kv = rd("<Q")
+    out: dict = {}
+    for _ in range(n_kv):
+        key = fh.read(rd("<Q")).decode("utf-8", "replace")
+        vtype = rd("<I")
+        if key in want or (key.endswith(".block_count") and "?" in want):
+            if vtype == 8:
+                out[key] = fh.read(rd("<Q")).decode("utf-8", "replace")
+            elif vtype in _SCALAR:
+                out[key] = rd(_SCALAR[vtype])
+            else:
+                skip(vtype)
+            if "general.architecture" in out and any(k.endswith(".block_count") for k in out):
+                break
+        else:
+            skip(vtype)
+    return out
+
+
 @functools.lru_cache(maxsize=32)
 def _block_count(path: str, mtime: float) -> int | None:
     try:
-        import gguf
-
-        r = gguf.GGUFReader(path, "r")
-        arch_f = r.fields.get("general.architecture")
-        arch = bytes(arch_f.parts[arch_f.data[0]]).decode()
-        f = r.fields.get(f"{arch}.block_count")
-        return int(f.parts[f.data[0]][0]) if f else None
-    except Exception:
+        with open(path, "rb", buffering=1 << 16) as fh:
+            kv = _read_kv(fh, {"general.architecture", "?"})
+        arch = kv.get("general.architecture")
+        v = kv.get(f"{arch}.block_count")
+        return int(v) if v is not None else None
+    except (OSError, ValueError, KeyError, UnicodeDecodeError):
+        return None
+    except Exception:  # struct.error on a truncated file
         return None
 
 
@@ -159,6 +211,8 @@ class Sampler:
                 "flags": key_flags_summary(args) if args else [],
                 "args": _args_dict(args) if args else None,
                 "health": res["health"].status, "metrics_status": m.status,
+                "auth": bool((args and args.api_key_set) or "auth" in (
+                    res["health"].status, m.status, s.status)),
                 "slots_status": s.status, "slots": slots,
                 "throughput": dataclasses.asdict(tp),
                 "rss": lp.rss if lp else None, "swap": lp.swap if lp else None,
@@ -241,14 +295,14 @@ class Sampler:
                             "hint": "RAM is too small for what runs on CPU: offload more to GPU or use a smaller quant."})
         for s in sample["servers"]:
             label = s["name"]
-            if s["metrics_status"] == "disabled" and s["role"] != "external":
-                out.append({"level": "info", "code": "metrics_off",
-                            "text": f"{label}: /metrics is off, tokens/s estimated from /slots",
-                            "hint": "Restart llama-server with --metrics for exact tokens/s."})
-            if s["health"] == "auth" or s["metrics_status"] == "auth":
+            if s["auth"] and s["slots_status"] in ("auth", "disabled") and s["metrics_status"] != "ok":
                 out.append({"level": "warn", "code": "server_auth",
-                            "text": f"{label}: endpoints need an API key (--api-key)",
-                            "hint": "Throughput cannot be read; process and memory data are still shown."})
+                            "text": f"{label}: endpoints need an API key (--api-key), tokens/s cannot be read",
+                            "hint": "Process, memory and VRAM figures are still shown."})
+            elif s["metrics_status"] == "disabled" and s["role"] != "external":
+                out.append({"level": "info", "code": "metrics_off",
+                            "text": f"{label}: /metrics is off, tokens/s comes from /slots",
+                            "hint": "Restart llama-server with --metrics for the exact average per request."})
             if s["cpu_layers"]:
                 out.append({"level": "info", "code": "layers_on_cpu",
                             "text": f"{label}: part of the model runs on CPU",

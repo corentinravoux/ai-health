@@ -61,7 +61,24 @@ def _listening(p) -> list[tuple[str, int]]:
                    if c.status == psutil.CONN_LISTEN and c.laddr}, key=lambda x: x[1])
 
 
-def find_llama_processes(procs=None) -> list[LlamaProcess]:
+def _read_proc_status(p) -> str:
+    with open(f"/proc/{p.pid}/status") as fh:
+        return fh.read()
+
+
+def _swap_bytes(p, read_status) -> int | None:
+    """VmSwap from /proc/<pid>/status (~0.1 ms). memory_full_info() parses
+    smaps instead: ~165 ms of CPU per call on a server with a model mapped."""
+    try:
+        for line in read_status(p).splitlines():
+            if line.startswith("VmSwap:"):
+                return int(line.split()[1]) * 1024
+    except (*_ERRORS, OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def find_llama_processes(procs=None, read_status=_read_proc_status) -> list[LlamaProcess]:
     found: list[LlamaProcess] = []
     for p in (procs if procs is not None else _iter_system_procs()):
         try:
@@ -86,10 +103,12 @@ def find_llama_processes(procs=None) -> list[LlamaProcess]:
                 args.port, args.sources["port"] = port, "socket"
                 if args.sources.get("host") not in ("cli", "env"):
                     args.host = "127.0.0.1" if ip in ("0.0.0.0", "::") else ip
-            try:
-                swap = int(p.memory_full_info().swap)
-            except (*_ERRORS, AttributeError):
-                swap = None
+            swap = _swap_bytes(p, read_status)
+            if args.model and not os.path.isabs(os.path.expanduser(args.model)):
+                try:  # -m ../models/x.gguf is relative to the server's cwd
+                    args.model = os.path.normpath(os.path.join(p.cwd(), args.model))
+                except (*_ERRORS, OSError):
+                    pass
             found.append(LlamaProcess(
                 pid=p.pid, ppid=p.ppid(), exe_name=os.path.basename(argv[0]) if argv else name,
                 args=args, rss=int(p.memory_info().rss), swap=swap,

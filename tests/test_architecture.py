@@ -87,3 +87,9 @@ def test_linear_attention_layers_count_as_ssm(make_gguf):
     assert [layer["mixer"] for layer in a["layers"]] == ["ssm", "ssm", "ssm", "attention"]
     assert a["block"]["hybrid"] is True
     assert a["summary"]["n_layer_attn"] == 1
+
+
+def test_metadata_in_payload(make_gguf):
+    a = arch_of(make_gguf, n_layer=1, vocab=300)
+    assert a["metadata"]["general.architecture"] == "llama"
+    assert a["metadata"]["tokenizer.ggml.tokens"] == "[array len=300]"

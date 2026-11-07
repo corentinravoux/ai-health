@@ -25,7 +25,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* -- workspace ------------------------------------------------------------ */
-.ex { display: grid; height: 100%;
+.ex { position: relative; display: grid; height: 100%;
   grid-template-columns: 290px minmax(0, 1fr) 380px;
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: "sum sum sum" "tree center insp"; }
@@ -161,3 +161,11 @@ details > summary { cursor: pointer; color: var(--fg-dim); font-size: 12.5px; }
 @media (max-width: 1250px) {
   .ex { grid-template-columns: 240px minmax(0, 1fr) 320px; }
 }
+
+.details-panel { position: absolute; z-index: 5; right: var(--s5); top: 76px; width: min(720px, 70vw); max-height: 70vh;
+  display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--s5); padding: var(--s4);
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / .35); }
+.details-panel h3 { margin-bottom: var(--s2); }
+.details-panel input { padding: 4px 8px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--bg); font-size: 12px; }
+.meta-scroll { max-height: calc(70vh - 80px); overflow: auto; }

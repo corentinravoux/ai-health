@@ -82,7 +82,7 @@ export function mount(root) {
     // RAM
     t.ram.big.textContent = gib(sys.ram_used, 1);
     t.ram.unit.textContent = `of ${gib(sys.ram_total, 0)} GiB`;
-    const swapping = (sample.warnings || []).some((w) => w.code === "llm_swapping");
+    const swapping = (sample.warnings || []).some((w) => w.code === "llm_swapping" && w.level === "danger");
     t.ram.el.dataset.state = swapping ? "danger" : "";
     t.ram.sub.replaceChildren("Swap ", h("span", { class: "num" }, gib(sys.swap_used, 2)), " GiB",
       ", CPU ", h("span", { class: "num" }, pct(sys.cpu_percent)));

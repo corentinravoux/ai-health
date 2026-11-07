@@ -103,6 +103,14 @@ class GpuCollector:
     def sample(self) -> list[GpuSample]:
         if not self.available:
             return []
+        try:
+            return self._sample()
+        except Exception as e:  # GPU lost, driver/library mismatch after an upgrade
+            self.available = False
+            self.reason = f"NVML stopped responding: {e}"
+            return []
+
+    def _sample(self) -> list[GpuSample]:
         nv = self._nv
         out = []
         for i, h in enumerate(self._handles):

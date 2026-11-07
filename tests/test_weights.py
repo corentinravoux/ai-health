@@ -102,3 +102,40 @@ def test_cache_hits(make_gguf, monkeypatch):
     monkeypatch.setattr("ai_health.explorer.weights.tensor_view",
                         lambda *a, **k: pytest.fail("cache miss"))
     assert cache.get(m, "blk.0.attn_q.weight", "absmax") is a
+
+
+def test_element_cap_limits_rows(make_gguf):
+    m = open_model(make_gguf(n_layer=1, vocab=20000))  # token_embd: 20000 rows x 64
+    v = tensor_view(m, "token_embd.weight", max_rows=8192, max_elems=64 * 1000)
+    assert v.sampled and v.rows_used == 1000
+
+
+def test_service_serialises_and_dedupes_views(make_gguf, monkeypatch):
+    import threading
+    import time
+
+    from ai_health.explorer import weights
+    from ai_health.explorer.service import ExplorerService
+
+    svc = ExplorerService(search_dirs=[])
+    svc.open(str(make_gguf(n_layer=1)))
+    calls, active, peak = [], [0], [0]
+    real = weights.tensor_view
+
+    def slow(*a, **k):
+        active[0] += 1
+        peak[0] = max(peak[0], active[0])
+        calls.append(a[1])
+        time.sleep(0.05)
+        active[0] -= 1
+        return real(*a, **k)
+
+    monkeypatch.setattr(weights, "tensor_view", slow)
+    names = ["blk.0.attn_q.weight"] * 3 + ["blk.0.attn_k.weight", "blk.0.ffn_up.weight"]
+    ts = [threading.Thread(target=svc.view, args=(n, "absmax")) for n in names]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert peak[0] == 1                      # one dequantization at a time
+    assert calls.count("blk.0.attn_q.weight") == 1   # duplicates served from the first
