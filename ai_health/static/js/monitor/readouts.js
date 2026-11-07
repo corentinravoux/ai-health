@@ -51,7 +51,7 @@ export function mount(root) {
     } else {
       t.tps.big.textContent = rate(tp.busy ? tp.gen : tp.last);
       t.tps.unit.textContent = "tok/s";
-      t.tps.src.textContent = tp.source === "metrics" ? "from /metrics" : tp.source === "slots" ? "estimated from /slots" : "no data";
+      t.tps.src.textContent = tp.source === "metrics" ? "exact, from /metrics" : tp.source === "slots" ? "live, from /slots" : "no data";
       t.tps.sub.replaceChildren(
         tp.busy ? "Generating" : "Idle, last rate shown",
         tp.prompt != null ? h("span", {}, ", prompt ", h("span", { class: "num" }, rate(tp.prompt)), " tok/s") : "",
