@@ -17,7 +17,7 @@ export function mount(root) {
   const run = async () => {
     const v = select.value;
     flags.hidden = v !== "flags";
-    if (v === "none") { store.set("placement", null); result.replaceChildren(h("div", { class: "dim", style: { fontSize: "12.5px" } },
+    if (!v || v === "none") { store.set("placement", null); result.replaceChildren(h("div", { class: "dim", style: { fontSize: "12.5px" } },
       "Choose a running llama-server or type flags to see which layers land on the GPU.")); return; }
     const body = v === "flags" ? { flags: flags.value } : { pid: Number(v) };
     try {

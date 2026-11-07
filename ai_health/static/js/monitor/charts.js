@@ -70,7 +70,12 @@ export function mount(root) {
         axes: [
           { stroke: axisColor, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid }, size: 28,
             font: "11px Instrument Sans", space: 90,
-            values: (u, vals) => vals.map((v) => new Date(v * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })) },
+            values: (u, vals) => {
+              const span = (u.scales.x.max ?? 0) - (u.scales.x.min ?? 0);
+              const opt = span < 300 ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }
+                : { hour: "2-digit", minute: "2-digit", hour12: false };
+              return vals.map((v) => new Date(v * 1000).toLocaleTimeString([], opt));
+            } },
           { stroke: axisColor, grid: { stroke: grid, width: 1 }, ticks: { show: false }, size: 50,
             font: "300 10.5px Martian Mono", space: 28 },
         ],
@@ -96,7 +101,9 @@ export function mount(root) {
       for (const { plot, panel } of plots) {
         plot.batch(() => {
           plot.setData([data.t, ...panel.lines.map((l) => data[l.field])], false);
-          plot.setScale("x", { min: now - windowS, max: now });
+          // until there is a full window of history, stretch what exists
+          const first = data.t.length ? data.t[0] : now - windowS;
+          plot.setScale("x", { min: Math.max(now - windowS, Math.min(first, now - 30)), max: now });
         });
       }
     });

@@ -13,7 +13,10 @@ function card(s) {
     : s.health === "auth" || s.metrics_status === "auth"
       ? h("div", { class: "note" }, "This server needs an API key, so its endpoints cannot be read.")
       : s.health === "unreachable" ? h("div", { class: "note" }, `Not answering on port ${s.port}.`) : null;
-  const slots = (s.slots || []).map((sl) => {
+  const all = s.slots || [];
+  const shown = all.filter((sl) => sl.busy || sl.n_prompt);
+  const idle = all.length - shown.length;
+  const slots = (shown.length ? shown : all.slice(0, 1)).map((sl) => {
     const used = sl.n_prompt != null ? sl.n_prompt + (sl.n_decoded || 0) : null;
     return h("div", { class: "slot" },
       h("div", {}, `Slot ${sl.id} `, h("b", {}, sl.busy ? "generating" : "idle"),
@@ -39,7 +42,8 @@ function card(s) {
       h("span", { class: "num" }, bytes(s.vram_bytes)), h("span", { class: "num" }, bytes(s.rss)),
       h("span", { class: "num" }, s.swap == null ? DASH : bytes(s.swap)), h("span", { class: "num" }, pct(s.cpu_percent)),
       h("span", { class: "num" }, s.threads ?? DASH)) : "",
-    ...slots, hint, explore);
+    ...slots, idle > 0 && shown.length ? h("div", { class: "slot faint" }, `${idle} more idle slot${idle > 1 ? "s" : ""}`) : "",
+    hint, explore);
 }
 
 export function mount(root) {

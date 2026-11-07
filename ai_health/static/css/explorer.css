@@ -59,10 +59,10 @@
 .diagram-legend i { display: inline-block; width: 12px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .d-frame { fill: color-mix(in srgb, var(--panel) 85%, transparent); stroke: var(--line-strong); stroke-width: 1; }
 .d-module { fill: var(--panel-2); stroke: var(--line-strong); stroke-width: 1; }
-.d-module-title { fill: var(--fg); font: 600 12.5px var(--font-ui); }
-.d-module-sub { fill: var(--fg-dim); font: 400 11px var(--font-ui); }
-.d-label { fill: var(--fg-dim); font: 400 11.5px var(--font-ui); }
-.d-strong { fill: var(--fg); font: 600 13px var(--font-ui); }
+.d-module-title { fill: var(--fg); font: 600 13.5px var(--font-ui); }
+.d-module-sub { fill: var(--fg-dim); font: 400 12px var(--font-ui); }
+.d-label { fill: var(--fg-dim); font: 400 12.5px var(--font-ui); }
+.d-strong { fill: var(--fg); font: 600 14px var(--font-ui); }
 .d-num { fill: var(--fg-dim); font: 300 10px var(--font-num); }
 .d-rail { stroke: var(--fg-faint); stroke-width: 3; fill: none; stroke-linecap: round; }
 .d-wire { stroke: var(--fg-faint); stroke-width: 1.2; fill: none; }
@@ -70,11 +70,11 @@
 .d-junction circle { fill: var(--bg); stroke: var(--fg-dim); stroke-width: 1.4; }
 .d-junction path { stroke: var(--fg); stroke-width: 1.4; }
 .d-pill rect { fill: var(--panel-3); stroke: var(--line-strong); }
-.d-pill text { fill: var(--fg-dim); font: 500 11px var(--font-ui); }
+.d-pill text { fill: var(--fg-dim); font: 500 12px var(--font-ui); }
 .chipg { cursor: pointer; }
 .chipg rect.body { fill: var(--panel-3); stroke: var(--fg-faint); stroke-width: 1; transition: stroke var(--t-fast); }
-.chipg text { fill: var(--fg); font: 600 11px var(--font-ui); pointer-events: none; }
-.chipg text.q { fill: var(--fg-faint); font: 300 9px var(--font-num); }
+.chipg text { fill: var(--fg); font: 600 12px var(--font-ui); pointer-events: none; }
+.chipg text.q { fill: var(--fg-faint); font: 300 9.5px var(--font-num); }
 .chipg:hover rect.body { stroke: var(--fg); }
 .chipg.selected rect.body { stroke: var(--ram); stroke-width: 2; }
 .chipg[data-dev="GPU"] rect.body { fill: color-mix(in srgb, var(--gpu-place) 32%, var(--panel-2)); stroke: var(--gpu-place); }
