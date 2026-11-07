@@ -13,7 +13,7 @@ body {
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--ram); outline-offset: 2px; border-radius: var(--r-sm); }
-.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-stretch: 90%; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-stretch: 82%; font-weight: 400; }
 .dim { color: var(--fg-dim); }
 .faint { color: var(--fg-faint); }
 [hidden] { display: none !important; }
