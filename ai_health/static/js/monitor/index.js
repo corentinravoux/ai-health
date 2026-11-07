@@ -32,6 +32,6 @@ export function mount(root) {
     const g = sample.gpu?.devices?.[0];
     machine.textContent = [g ? `${g.name}, ${gib(g.mem_total, 0)} GiB VRAM` : "No NVIDIA GPU",
       `${gib(sample.system?.ram_total, 0)} GiB RAM`].join(", ");
-    empty.hidden = (sample.servers || []).length > 0 || (sample.processes || []).length > 0;
+    empty.hidden = (sample.servers || []).length > 0 || (sample.processes || []).length > 0 || (sample.stopped || []).length > 0;
   });
 }

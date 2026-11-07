@@ -116,3 +116,5 @@
   .mon { grid-template-columns: 1fr; grid-template-areas: "head" "readouts" "vram" "side" "charts"; }
   .readouts { grid-template-columns: 1fr 1fr; }
 }
+
+.server.stopped { opacity: .7; }

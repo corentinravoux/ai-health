@@ -23,6 +23,7 @@ from ai_health.llama.probe import ProbeResult, ServerProbe
 
 MiB = 2**20
 SERVER_ROLES = ("server", "router-child")
+STOPPED_KEEP_S = 60
 SWAP_DANGER = 512 * MiB  # a little old swap is normal; this much hurts tokens/s
 
 
@@ -89,6 +90,8 @@ class Sampler:
         self._name_map = name_map
         self._history: deque[dict] = deque(maxlen=max(1, int(history_s / interval)))
         self._trackers: dict[object, ThroughputTracker] = {}
+        self._last_servers: dict[object, dict] = {}
+        self._stopped: dict[object, dict] = {}
         self._subs: list[queue.Queue] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -168,6 +171,16 @@ class Sampler:
         for key in list(self._trackers):
             if key not in live_keys:
                 del self._trackers[key]
+        current = {(s_["pid"] if s_["pid"] is not None else ("ext", s_["host"], s_["port"])): s_
+                   for s_ in servers}
+        for key, old in self._last_servers.items():
+            if key not in current:
+                self._stopped[key] = {"pid": old["pid"], "name": old["name"], "port": old["port"],
+                                      "model": old["model"], "stopped_at": t}
+        for key in list(self._stopped):
+            if key in current or t - self._stopped[key]["stopped_at"] > STOPPED_KEEP_S:
+                del self._stopped[key]
+        self._last_servers = current
 
         llama_pids = {lp.pid for lp in procs}
         processes = [{
@@ -191,6 +204,7 @@ class Sampler:
                     "devices": [dataclasses.asdict(d) for d in devices]},
             "system": dataclasses.asdict(system),
             "servers": servers,
+            "stopped": list(self._stopped.values()),
             "processes": processes,
             "vram_holders": holders,
             "vram_unattributed": unattributed,

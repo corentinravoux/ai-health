@@ -39,6 +39,7 @@ class Placement:
     ngl_effective: int | None
     estimated: bool
     rules: list[str] = field(default_factory=list)
+    output_device: str = "GPU"  # output layer (also when tied to token_embd)
 
 
 @dataclass
@@ -133,7 +134,8 @@ def _build(model, args, ngl, n_cpu_moe, estimated, rules) -> Placement:
                  if ngl <= n else f"-ngl {ngl} (≥ {n + 1}): all {n} layers + output on GPU")
     rules.insert(1, "token_embd (input layer) always on CPU")
     rules += [f"{label}: CPU/GPU override applied" for label in sorted(used)]
-    return Placement(device, layers, gpu, cpu, ngl, estimated, rules)
+    out_dev = "GPU" if ngl >= 1 and n >= max(n + 1 - ngl, 0) else "CPU"
+    return Placement(device, layers, gpu, cpu, ngl, estimated, rules, out_dev)
 
 
 def compute_placement(model: ModelInfo, args: LlamaArgs, vram_free: int | None = None) -> Placement:
