@@ -157,3 +157,10 @@ def test_args_from_flags_accepts_full_command():
     a = args_from_flags("~/llama.cpp/build/bin/llama-server -m x.gguf -ngl 7")
     assert a.ngl == 7 and a.model == "x.gguf"
     assert args_from_flags("-ngl 3").ngl == 3
+
+
+def test_kv_skips_linear_attention_layers(make_gguf):
+    m = open_model(make_gguf(n_layer=4, linear_attn_layers=(0, 1, 2)))
+    a = args_from_flags("-ngl all -c 1024")
+    e = estimate_vram(m, a, compute_placement(m, a), None)
+    assert e.kv_cache == 1 * 1024 * 2 * 16 * 4

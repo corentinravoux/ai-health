@@ -85,3 +85,14 @@ def test_tokens_last_min():
     t = tr.update(70.0, M(130, 3.3), None)
     # window (10, 70]: +60 at t=30 and +30 at t=70
     assert t.tokens_last_min == 90
+
+
+def test_slots_next_token_as_list(fakes_dir):
+    # newer llama.cpp returns next_token as a list (seen live, 2026-11-07)
+    s1 = json.loads((fakes_dir / "slots_list_form.json").read_text())
+    s2 = json.loads((fakes_dir / "slots_list_form.json").read_text())
+    s2[0]["next_token"][0]["n_decoded"] = 85
+    tr = ThroughputTracker()
+    tr.update(0.0, None, s1)
+    t = tr.update(2.0, None, s2)
+    assert t.gen_tps == 30.0 and t.busy is True

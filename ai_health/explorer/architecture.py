@@ -96,7 +96,9 @@ def build_architecture(model: ModelInfo) -> dict:
             d["params"] += t.n_params
             d["tensors"].append(t.name)
         group_presence.update(groups.keys())
-        mixer = "attention" if "attention" in groups else "ssm" if "ssm" in groups else "none"
+        # state-space tensors mark a linear-attention / SSM layer even when it also
+        # has a fused qkv projection (Qwen3-Next, Qwen3.5 MoE): no KV cache there
+        mixer = "ssm" if "ssm" in groups else "attention" if "attention" in groups else "none"
         ffn = "moe" if "moe_experts" in groups else "dense" if "ffn" in groups else "none"
         mixers.append(mixer)
         layers.append({

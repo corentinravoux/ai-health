@@ -37,6 +37,7 @@ def make_gguf(
     split: int = 1,
     tied: bool = False,
     ssm_layers: tuple[int, ...] = (),
+    linear_attn_layers: tuple[int, ...] = (),
     name: str = "demo",
 ) -> Path:
     """Write a synthetic GGUF and return the path of its first shard."""
@@ -55,7 +56,11 @@ def make_gguf(
     for i in range(n_layer):
         p = f"blk.{i}."
         tensors.append((p + "attn_norm.weight", norm(), False))
-        if i in ssm_layers:
+        if i in linear_attn_layers:  # Qwen3-Next style: fused qkv + state-space tensors
+            tensors.append((p + "attn_qkv.weight", w(3 * n_head * head_dim, n_embd), True))
+            tensors.append((p + "ssm_conv1d.weight", w(3 * n_head * head_dim, 4), False))
+            tensors.append((p + "ssm_out.weight", w(n_embd, n_head * head_dim), True))
+        elif i in ssm_layers:
             tensors.append((p + "ssm_in.weight", w(2 * n_embd, n_embd), True))
             tensors.append((p + "ssm_out.weight", w(n_embd, n_embd), True))
         else:

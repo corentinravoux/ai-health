@@ -166,6 +166,8 @@ def open_model(path: str | Path) -> ModelInfo:
         rope_base=float(meta[a + "rope.freq_base"]) if a + "rope.freq_base" in meta else None,
         sliding_window=_as_int(meta.get(a + "attention.sliding_window")),
     )
+    for r in readers:  # parsed arrays are huge (tokenizer); keep only the summary
+        r.fields = {}
     return ModelInfo(
         path=path, shards=shards,
         name=str(meta.get("general.name") or path.stem),

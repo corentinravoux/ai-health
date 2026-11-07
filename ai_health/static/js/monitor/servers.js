@@ -13,10 +13,16 @@ function card(s) {
     : s.health === "auth" || s.metrics_status === "auth"
       ? h("div", { class: "note" }, "This server needs an API key, so its endpoints cannot be read.")
       : s.health === "unreachable" ? h("div", { class: "note" }, `Not answering on port ${s.port}.`) : null;
-  const slots = (s.slots || []).map((sl) => h("div", { class: "slot" },
-    `Slot ${sl.id} `, h("b", {}, sl.busy ? "generating" : "idle"),
-    sl.busy && sl.n_decoded != null ? `, ${sl.n_decoded} tokens so far` : "",
-    sl.n_ctx ? h("span", { class: "faint" }, `, context ${sl.n_ctx}`) : ""));
+  const slots = (s.slots || []).map((sl) => {
+    const used = sl.n_prompt != null ? sl.n_prompt + (sl.n_decoded || 0) : null;
+    return h("div", { class: "slot" },
+      h("div", {}, `Slot ${sl.id} `, h("b", {}, sl.busy ? "generating" : "idle"),
+        sl.busy && sl.n_decoded != null ? `, ${sl.n_decoded} tokens so far` : ""),
+      used != null && sl.n_ctx ? h("div", { class: "ctxbar", title: `${used} of ${sl.n_ctx} context tokens in use` },
+        h("span", { style: { width: `${Math.min(100, (100 * used) / sl.n_ctx)}%` } })) : "",
+      used != null && sl.n_ctx ? h("div", { class: "faint" }, `context ${used} of ${sl.n_ctx} tokens`)
+        : sl.n_ctx ? h("div", { class: "faint" }, `context ${sl.n_ctx}`) : "");
+  });
   const explore = s.model ? h("button", { class: "btn", onclick: () => {
     store.set("exploreRequest", { path: s.model, pid: s.pid });
   } }, "Explore this model") : null;

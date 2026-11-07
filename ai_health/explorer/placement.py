@@ -181,7 +181,9 @@ def estimate_vram(model: ModelInfo, args: LlamaArgs, placement: Placement,
     bv = KV_BYTES.get(args.cache_type_v.lower(), 2.0)
     per_layer = ctx * (hp.n_head_kv or 0) * (hp.head_dim or 0) * (bk + bv)
     kv_roles = ("attn_k", "attn_qkv", "attn_kv_a_mqa")
-    attn_layers = {t.layer for t in model.tensors if t.layer is not None and t.role in kv_roles}
+    ssm_layers = {t.layer for t in model.tensors if t.layer is not None and t.component == "ssm"}
+    attn_layers = {t.layer for t in model.tensors
+                   if t.layer is not None and t.role in kv_roles} - ssm_layers
     gpu_layers = {L["index"] for L in placement.layers if L["device"] != "CPU"}
     if args.kv_offload:
         kv = round(per_layer * len(attn_layers & gpu_layers))

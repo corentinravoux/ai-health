@@ -80,7 +80,7 @@ def test_tick_contract_keys():
     srv = sample["servers"][0]
     assert srv["pid"] == 10 and srv["port"] == 8010 and srv["role"] == "server"
     assert srv["health"] == "ok" and srv["metrics_status"] == "ok"
-    assert srv["slots"] == [{"id": 0, "n_ctx": 4096, "busy": True, "n_decoded": 7}]
+    assert srv["slots"] == [{"id": 0, "n_ctx": 4096, "busy": True, "n_decoded": 7, "n_prompt": None}]
     assert srv["throughput"]["source"] == "metrics"
     assert ["ngl", "auto (fit)"] in [list(f) for f in srv["flags"]]
     assert "raw" not in srv["args"]
@@ -167,8 +167,13 @@ def test_no_vram_warning_when_low():
     assert not any(c == "vram_high" for _, c in codes(s.tick()))
 
 
-def test_swap_warning():
+def test_swap_warning_small_is_warn():
     s, _, _ = make([server(swap=2**20)])
+    assert ("warn", "llm_swapping") in codes(s.tick())
+
+
+def test_swap_warning_large_is_danger():
+    s, _, _ = make([server(swap=600 * 2**20)])
     assert ("danger", "llm_swapping") in codes(s.tick())
 
 
@@ -214,3 +219,19 @@ def test_start_stop_thread():
     finally:
         s.stop()
     assert got.is_set()
+
+
+def test_slot_summary_handles_list_form_and_prompt_tokens(fakes_dir):
+    import json as _json
+
+    data = _json.loads((fakes_dir / "slots_list_form.json").read_text())
+
+    class ListProbe(FakeProbe):
+        def slots(self):
+            return ProbeResult(True, "ok", data)
+
+    clock = Clock()
+    s = Sampler(FakeGpu(), system=fake_system, find_procs=lambda: find_llama_processes([server()]),
+                probe_factory=ListProbe, clock=clock, name_map=lambda pids: {})
+    [sl] = s.tick()["servers"][0]["slots"]
+    assert sl == {"id": 0, "n_ctx": 32768, "busy": True, "n_decoded": 25, "n_prompt": 309}
