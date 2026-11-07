@@ -72,3 +72,18 @@ def test_name_gate_skips_cmdline_of_unrelated_processes():
 
     procs = [NoCmdline(70, 1, "bash", ["bash"]), FakeProc(71, 1, "llama-server", [BIN + "llama-server"])]
     assert [p.pid for p in find_llama_processes(procs)] == [71]
+
+
+def test_port_from_listening_socket_when_not_given():
+    # llama.cpp's default port changed across versions (8080 -> 9931): trust the socket
+    procs = [FakeProc(80, 1, "llama-server", [BIN + "llama-server", "-m", "x"], listen=[("127.0.0.1", 9931)])]
+    [p] = find_llama_processes(procs)
+    assert p.args.port == 9931 and p.args.sources["port"] == "socket"
+    assert p.listen_ports == [9931]
+
+
+def test_explicit_port_wins_over_socket():
+    procs = [FakeProc(81, 1, "llama-server", [BIN + "llama-server", "-m", "x", "--port", "7000"],
+                      listen=[("127.0.0.1", 7000), ("127.0.0.1", 7001)])]
+    [p] = find_llama_processes(procs)
+    assert p.args.port == 7000 and p.args.sources["port"] == "cli"

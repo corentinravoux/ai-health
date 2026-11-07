@@ -7,7 +7,8 @@ import psutil
 
 class FakeProc:
     def __init__(self, pid, ppid, name, cmdline, rss=100 * 2**20, environ=None,
-                 cpu=5.0, threads=8, swap=0, deny_environ=False, has_full_info=True):
+                 cpu=5.0, threads=8, swap=0, deny_environ=False, has_full_info=True,
+                 listen=()):
         self.pid = pid
         self._ppid = ppid
         self._name = name
@@ -19,6 +20,7 @@ class FakeProc:
         self._swap = swap
         self._deny = deny_environ
         self._full = has_full_info
+        self._listen = list(listen)
 
     def name(self):
         return self._name
@@ -53,3 +55,7 @@ class FakeProc:
 
     def is_running(self):
         return True
+
+    def net_connections(self, kind="inet"):
+        return [SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(ip=ip, port=port))
+                for ip, port in self._listen]

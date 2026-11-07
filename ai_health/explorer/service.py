@@ -14,7 +14,8 @@ from .model import ModelInfo, open_model
 from .placement import compute_placement, estimate_vram
 from .weights import TensorView, ViewCache
 
-DEFAULT_DIRS = ["~/models", "~/Models", "~/.cache/llama.cpp", "~/.cache/huggingface/hub"]
+DEFAULT_DIRS = ["~/models", "~/Models", "~/Software/models", "~/.cache/llama.cpp",
+                "~/.cache/huggingface/hub"]
 MAX_FOUND = 200
 
 
