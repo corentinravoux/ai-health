@@ -62,9 +62,11 @@ class _CounterRate:
         self.count_key, self.secs_key = count_key, secs_key
         self.prev: tuple[float, float] | None = None
         self.last: float | None = None
+        self.changed = False
 
     def update(self, m: dict[str, float]) -> tuple[float | None, float]:
-        """Returns (rate, token delta)."""
+        """Returns (rate, token delta); sets ``changed`` when the counters moved."""
+        self.changed = False
         if self.count_key not in m or self.secs_key not in m:
             return None, 0.0
         cur = (m[self.count_key], m[self.secs_key])
@@ -77,10 +79,15 @@ class _CounterRate:
             return None, 0.0
         if ds > 0:
             self.last = dc / ds
+            self.changed = True
         return self.last, dc
 
 
 class ThroughputTracker:
+    """llama-server adds a request's tokens to /metrics only when the request
+    finishes, so while generating the live rate comes from /slots and the
+    exact decode-time average from /metrics once the request is done."""
+
     WINDOW = 60.0
 
     def __init__(self):
@@ -98,35 +105,53 @@ class ThroughputTracker:
             self._window.popleft()
         return int(sum(d for _, d in self._window))
 
+    def _slots(self, t: float, slots: list[dict]) -> tuple[float | None, int, bool, bool]:
+        """(live rate this tick or None, decoded delta, busy, first sample)."""
+        delta = 0
+        cur: dict[int, int] = {}
+        for s in slots:
+            n = slot_decoded(s) or 0
+            sid = int(s.get("id", 0))
+            cur[sid] = n
+            prev = self._slot_prev.get(sid)
+            if prev is not None:
+                delta += n - prev if n >= prev else n
+        first = self._slot_t is None
+        dt = None if first else t - self._slot_t
+        self._slot_prev, self._slot_t = cur, t
+        busy = any(bool(s.get("is_processing")) for s in slots)
+        rate = None
+        if dt and dt > 0 and delta > 0:
+            rate = delta / dt
+            self._slot_last = rate
+        return rate, delta, busy, first
+
     def update(self, t: float, metrics: dict[str, float] | None,
                slots: list[dict] | None) -> Throughput:
+        live = self._slots(t, slots) if slots is not None else None
         if metrics is not None and "tokens_predicted_total" in metrics:
             gen, dgen = self._gen.update(metrics)
             prompt, _ = self._prompt.update(metrics)
             proc = metrics.get("requests_processing")
-            busy = proc > 0 if proc is not None else dgen > 0
+            if proc is not None:
+                busy = proc > 0
+            elif live is not None:
+                busy = live[2]
+            else:
+                busy = dgen > 0
+            gen_out, source = gen, "metrics"
+            if busy and not self._gen.changed and live is not None and live[0] is not None:
+                gen_out, source = live[0], "slots"
+            # count tokens once: live slot deltas when we have them, else counter deltas
+            delta = live[1] if live is not None else dgen
             return Throughput(
-                gen_tps=gen, prompt_tps=prompt, busy=bool(busy),
-                tokens_last_min=self._tokens_last_min(t, dgen), source="metrics",
+                gen_tps=gen_out, prompt_tps=prompt, busy=bool(busy),
+                tokens_last_min=self._tokens_last_min(t, delta), source=source,
                 requests_processing=int(proc) if proc is not None else None,
                 requests_deferred=int(metrics["requests_deferred"])
                 if "requests_deferred" in metrics else None)
-        if slots is not None:
-            delta = 0
-            cur: dict[int, int] = {}
-            for s in slots:
-                n = slot_decoded(s) or 0
-                sid = int(s.get("id", 0))
-                cur[sid] = n
-                prev = self._slot_prev.get(sid)
-                if prev is not None:
-                    delta += n - prev if n >= prev else n
-            first = self._slot_t is None
-            dt = None if first else t - self._slot_t
-            self._slot_prev, self._slot_t = cur, t
-            busy = any(bool(s.get("is_processing")) for s in slots)
-            if dt and dt > 0 and delta > 0:
-                self._slot_last = delta / dt
+        if live is not None:
+            rate, delta, busy, first = live
             return Throughput(
                 gen_tps=None if first else self._slot_last, busy=busy,
                 tokens_last_min=self._tokens_last_min(t, delta), source="slots",

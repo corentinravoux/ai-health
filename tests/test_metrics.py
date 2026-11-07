@@ -96,3 +96,18 @@ def test_slots_next_token_as_list(fakes_dir):
     tr.update(0.0, None, s1)
     t = tr.update(2.0, None, s2)
     assert t.gen_tps == 30.0 and t.busy is True
+
+
+def test_metrics_update_only_at_request_end_so_slots_give_live_rate():
+    # llama-server adds a request's tokens to /metrics when it finishes (seen live):
+    # while generating, the live rate must come from /slots.
+    tr = ThroughputTracker()
+    tr.update(0.0, M(1000, 20.0, proc=1), slots(0))
+    t = tr.update(1.0, M(1000, 20.0, proc=1), slots(90))
+    assert t.busy is True and t.gen_tps == 90.0 and t.source == "slots"
+    t = tr.update(2.0, M(1000, 20.0, proc=1), slots(185))
+    assert t.gen_tps == 95.0 and t.source == "slots"
+    # request finished: counters jump by 200 tokens over 2.1 s of decode time
+    t = tr.update(3.0, M(1200, 22.1, proc=0), slots(0, busy=False))
+    assert t.busy is False and t.source == "metrics"
+    assert abs(t.gen_tps - 200 / 2.1) < 1e-9
