@@ -29,20 +29,21 @@ class LlamaProcess:
     role: str = "other"  # "server" | "router" | "router-child" | "cli" | "bench" | "other"
 
 
+def _llama_name(name: str) -> bool:
+    return name == "llama" or name.startswith("llama-")
+
+
 def is_llama_process(name: str, argv: list[str]) -> bool:
     base = os.path.basename(argv[0]) if argv else ""
-    for candidate in (name, base):
-        if candidate == "llama" or candidate.startswith("llama-"):
-            return True
-    return False
+    return _llama_name(name) or _llama_name(base)
 
 
 def _iter_system_procs():
     alive = set()
-    for p in psutil.process_iter(["name"]):
+    for p in psutil.process_iter(["name", "create_time"]):
         alive.add(p.pid)
         cached = _PROC_CACHE.get(p.pid)
-        if cached is None or cached.create_time() != p.create_time():
+        if cached is None or cached.info["create_time"] != p.info["create_time"]:
             _PROC_CACHE[p.pid] = cached = p
         yield cached
     for pid in list(_PROC_CACHE):
@@ -54,7 +55,12 @@ def find_llama_processes(procs=None) -> list[LlamaProcess]:
     found: list[LlamaProcess] = []
     for p in (procs if procs is not None else _iter_system_procs()):
         try:
-            name = p.name()
+            info = getattr(p, "info", None)
+            name = info["name"] if isinstance(info, dict) and info.get("name") else p.name()
+            # comm (name) is the executable basename truncated to 15 chars, so
+            # it is enough to gate on; reading every cmdline costs ~50 ms/tick.
+            if not _llama_name(name):
+                continue
             argv = p.cmdline()
             if not is_llama_process(name, argv):
                 continue
