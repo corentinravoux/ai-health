@@ -79,3 +79,11 @@ def test_kv_bytes_per_token(make_gguf):
     s = arch_of(make_gguf, n_layer=4, ssm_layers=(0,))["summary"]
     assert s["kv_bytes_per_token_f16"] == 2 * 3 * 2 * 16 * 2
     assert s["n_layer_attn"] == 3
+
+
+def test_linear_attention_layers_count_as_ssm(make_gguf):
+    # Qwen3-Next / Qwen3.5 MoE: linear-attention layers carry attn_qkv *and* ssm_* tensors
+    a = arch_of(make_gguf, n_layer=4, linear_attn_layers=(0, 1, 2))
+    assert [layer["mixer"] for layer in a["layers"]] == ["ssm", "ssm", "ssm", "attention"]
+    assert a["block"]["hybrid"] is True
+    assert a["summary"]["n_layer_attn"] == 1

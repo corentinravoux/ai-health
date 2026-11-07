@@ -18,11 +18,12 @@ from concurrent.futures import ThreadPoolExecutor
 from ai_health.collectors.processes import find_llama_processes, process_name_map
 from ai_health.collectors.system import system_sample
 from ai_health.llama.cmdline import LlamaArgs, key_flags_summary
-from ai_health.llama.metrics import ThroughputTracker
+from ai_health.llama.metrics import ThroughputTracker, slot_decoded
 from ai_health.llama.probe import ProbeResult, ServerProbe
 
 MiB = 2**20
 SERVER_ROLES = ("server", "router-child")
+SWAP_DANGER = 512 * MiB  # a little old swap is normal; this much hurts tokens/s
 
 
 @functools.lru_cache(maxsize=32)
@@ -144,7 +145,8 @@ class Sampler:
                 for sl in s.data:
                     slots.append({"id": sl.get("id"), "n_ctx": sl.get("n_ctx"),
                                   "busy": bool(sl.get("is_processing")),
-                                  "n_decoded": (sl.get("next_token") or {}).get("n_decoded")})
+                                  "n_decoded": slot_decoded(sl),
+                                  "n_prompt": sl.get("n_prompt_tokens")})
             model = (args.model if args else None)
             servers.append({
                 "pid": lp.pid if lp else None, "role": lp.role if lp else "external",
@@ -219,7 +221,8 @@ class Sampler:
                             "hint": "Little headroom left for a longer context."})
         for lp in procs:
             if lp.swap:
-                out.append({"level": "danger", "code": "llm_swapping",
+                out.append({"level": "danger" if lp.swap >= SWAP_DANGER else "warn",
+                            "code": "llm_swapping",
                             "text": f"{lp.exe_name} (pid {lp.pid}) has {lp.swap / MiB:.0f} MiB in swap",
                             "hint": "RAM is too small for what runs on CPU: offload more to GPU or use a smaller quant."})
         for s in sample["servers"]:

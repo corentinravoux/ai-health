@@ -197,7 +197,10 @@ function draw(arch, L, idx, device, sel) {
       if (m) { block.push(...m.draw(y)); m.y = y; y += m.height + 18; block.push(wire(`M${MX + 40} ${m.y}V${junctions.at(-1)}H${RAIL + 9}`)); }
     } else if (step === "mixer") {
       junctions.push(y); y += 26;
-      const m = present("attention") ? attnModule() : present("ssm") ? genericModule("ssm", "State-space mixer", "recurrent sequence mixing, no KV cache") : null;
+      const m = layer.mixer === "ssm"
+        ? genericModule(["attention", "ssm"], present("attention") ? "Linear attention (state-space)" : "State-space mixer",
+          "fixed-size recurrent state instead of a KV cache")
+        : present("attention") ? attnModule() : null;
       if (m) { block.push(...m.draw(y)); m.y = y; y += m.height + 18; block.push(wire(`M${MX + 40} ${m.y}V${junctions.at(-1)}H${RAIL + 9}`)); }
     } else if (present(step)) {
       const name = groupTensors(step)[0];
@@ -362,8 +365,8 @@ function draw(arch, L, idx, device, sel) {
       return [...out, ...placed.filter((p) => p instanceof Element)];
     } };
   }
-  function genericModule(gid, title, sub) {
-    const names = groupTensors(gid);
+  function genericModule(gids, title, sub) {
+    const names = [].concat(gids).flatMap((g) => groupTensors(g));
     const perRow = 5;
     const rowsN = Math.max(1, Math.ceil(names.length / perRow));
     const height = 52 + rowsN * 44;

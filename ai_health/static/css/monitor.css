@@ -94,6 +94,9 @@
 .kv .num { font-size: 12px; color: var(--fg); }
 .slot { font-size: 12.5px; color: var(--fg-dim); }
 .slot b { color: var(--fg); font-weight: 500; }
+.slot { display: flex; flex-direction: column; gap: 4px; }
+.ctxbar { height: 4px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.ctxbar span { display: block; height: 100%; background: var(--fg-dim); }
 .server .note { font-size: 12.5px; color: var(--fg-dim); border-left: 2px solid var(--line-strong); padding-left: var(--s2); }
 
 .procs { padding: var(--s3) 0 var(--s2); }

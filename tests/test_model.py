@@ -94,3 +94,13 @@ def test_open_does_not_read_tensor_data(make_gguf):
     out = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True,
                          text=True, check=True).stdout
     assert int(out) / 1024 < 50  # MB grown while opening: header only
+
+
+def test_open_releases_parsed_metadata(make_gguf):
+    # gguf-py keeps every array element (248k tokenizer entries) as numpy objects:
+    # ~370 MB for a real model. Metadata is summarised, then the parsed fields dropped.
+    m = open_model(make_gguf(n_layer=1, vocab=256))
+    assert all(not r.fields for r in m.readers)
+    assert m.metadata["tokenizer.ggml.tokens"] == "[array len=256]"
+    raw, _ = read_tensor_raw(m, "blk.0.attn_q.weight")
+    assert raw.size > 0

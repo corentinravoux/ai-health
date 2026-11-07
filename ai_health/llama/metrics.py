@@ -32,6 +32,18 @@ def parse_prometheus(text: str) -> dict[str, float]:
     return out
 
 
+def slot_decoded(slot: dict) -> int | None:
+    """Tokens generated so far in a slot. ``next_token`` is an object in older
+    llama.cpp builds and a list (one entry per sequence) in newer ones."""
+    nt = slot.get("next_token")
+    if isinstance(nt, dict):
+        nt = [nt]
+    if not isinstance(nt, list):
+        return None
+    vals = [int(x.get("n_decoded") or 0) for x in nt if isinstance(x, dict)]
+    return sum(vals) if vals else None
+
+
 @dataclass
 class Throughput:
     gen_tps: float | None = None
@@ -103,7 +115,7 @@ class ThroughputTracker:
             delta = 0
             cur: dict[int, int] = {}
             for s in slots:
-                n = int((s.get("next_token") or {}).get("n_decoded") or 0)
+                n = slot_decoded(s) or 0
                 sid = int(s.get("id", 0))
                 cur[sid] = n
                 prev = self._slot_prev.get(sid)
