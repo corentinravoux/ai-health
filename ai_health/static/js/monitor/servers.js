@@ -45,6 +45,11 @@ function card(s) {
 export function mount(root) {
   store.on("sample", (sample) => {
     const servers = sample.servers || [];
-    root.replaceChildren(...servers.map(card));
+    const stopped = (sample.stopped || []).map((g) => h("div", { class: "panel server stopped" },
+      h("div", { class: "server-top" }, h("span", { class: "health", "data-s": "error" }),
+        h("h3", { title: g.model || "" }, g.name), h("span", { class: "grow" }),
+        h("span", { class: "chip" }, "stopped", h("b", {}, `:${g.port}`))),
+      h("div", { class: "note" }, `Stopped at ${new Date(g.stopped_at * 1000).toLocaleTimeString([], { hour12: false })}${g.pid ? ` (pid ${g.pid})` : ""}.`)));
+    root.replaceChildren(...servers.map(card), ...stopped);
   });
 }

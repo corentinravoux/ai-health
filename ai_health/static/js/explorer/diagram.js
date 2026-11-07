@@ -92,7 +92,7 @@ export function mount(root) {
     const idx = store.get("tensorIndex") || new Map();
     const device = place?.placement?.device || null;
     legend.hidden = !device;
-    const out = draw(arch, L, idx, device, sel);
+    const out = draw(arch, L, idx, device, sel, place?.placement?.output_device);
     svg.replaceChildren(...out.nodes);
     full = { x: 0, y: 0, w: W, h: out.height };
     const key = `${arch.path}`;
@@ -121,7 +121,7 @@ export function mount(root) {
 }
 
 // ---------------------------------------------------------------------------
-function draw(arch, L, idx, device, sel) {
+function draw(arch, L, idx, device, sel, outputDevice = null) {
   const nodes = [defs()];
   const layer = arch.layers[L] || { groups: {} };
   const hp = arch.hparams;
@@ -135,9 +135,9 @@ function draw(arch, L, idx, device, sel) {
     const f = Math.log2(1 + t.n_bytes) / Math.log2(1 + maxB);
     return Math.round(min + (max - min) * f * f);
   };
-  const chip = (name, label, x, y, w, hgt = 34) => {
+  const chip = (name, label, x, y, w, hgt = 34, devOverride = null) => {
     const t = idx.get(name);
-    const dev = device ? device[name] : null;
+    const dev = devOverride || (device ? device[name] : null);
     const g = s("g", { class: `chipg${sel === name ? " selected" : ""}`, "data-name": name, "data-dev": dev, tabindex: 0 },
       s("rect", { class: "body", x, y, width: w, height: hgt, rx: 5 }),
       s("text", { x: x + 8, y: y + 15 }, label),
@@ -168,7 +168,8 @@ function draw(arch, L, idx, device, sel) {
   if (headOut) {
     const n = headOut.tensors[0];
     const w = chipW(n, 120, 260);
-    top.push(chip(n, headOut.tied ? "Output head (tied to embedding)" : "Output head", RAIL - w / 2, y, w, 38));
+    top.push(chip(n, headOut.tied ? "Output head (tied to embedding)" : "Output head", RAIL - w / 2, y, w, 38,
+      headOut.tied && device ? outputDevice : null));
     top.push(text(RAIL + w / 2 + 10, y + 24, headOut.tied ? "reuses token_embd" : "d_model → vocab", "d-label"));
     y += 38;
   }

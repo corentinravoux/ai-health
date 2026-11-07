@@ -164,3 +164,10 @@ def test_kv_skips_linear_attention_layers(make_gguf):
     a = args_from_flags("-ngl all -c 1024")
     e = estimate_vram(m, a, compute_placement(m, a), None)
     assert e.kv_cache == 1 * 1024 * 2 * 16 * 4
+
+
+def test_tied_output_layer_device(make_gguf):
+    # llama.cpp duplicates token_embd into the output layer when output.weight is absent
+    m = open_model(make_gguf(n_layer=4, tied=True))
+    assert compute_placement(m, args_from_flags("-ngl 99")).output_device == "GPU"
+    assert compute_placement(m, args_from_flags("-ngl 0")).output_device == "CPU"

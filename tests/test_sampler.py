@@ -75,7 +75,7 @@ def server(pid=10, extra=(), **kw):
 def test_tick_contract_keys():
     s, _, _ = make([server(extra=["--metrics"])])
     sample = s.tick()
-    assert set(sample) >= {"t", "gpu", "system", "servers", "processes", "vram_holders",
+    assert set(sample) >= {"t", "gpu", "system", "servers", "stopped", "processes", "vram_holders",
                            "vram_unattributed", "warnings"}
     srv = sample["servers"][0]
     assert srv["pid"] == 10 and srv["port"] == 8010 and srv["role"] == "server"
@@ -235,3 +235,15 @@ def test_slot_summary_handles_list_form_and_prompt_tokens(fakes_dir):
                 probe_factory=ListProbe, clock=clock, name_map=lambda pids: {})
     [sl] = s.tick()["servers"][0]["slots"]
     assert sl == {"id": 0, "n_ctx": 32768, "busy": True, "n_decoded": 25, "n_prompt": 309}
+
+
+def test_vanished_server_listed_as_stopped_for_a_while():
+    s, clock, plist = make([server(extra=["--metrics"])])
+    s.tick()
+    plist.clear()
+    clock.t = 1.0
+    sample = s.tick()
+    [gone] = sample["stopped"]
+    assert gone["pid"] == 10 and gone["stopped_at"] == 1.0 and gone["name"] == "a.gguf"
+    clock.t = 200.0
+    assert s.tick()["stopped"] == []
