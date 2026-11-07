@@ -26,7 +26,8 @@ class LlamaProcess:
     threads: int
     started: float
     children: list[int] = field(default_factory=list)
-    role: str = "other"  # "server" | "router" | "router-child" | "cli" | "bench" | "other"
+    role: str = "other"
+    listen_ports: list[int] = field(default_factory=list)  # "server" | "router" | "router-child" | "cli" | "bench" | "other"
 
 
 def _llama_name(name: str) -> bool:
@@ -51,6 +52,15 @@ def _iter_system_procs():
             del _PROC_CACHE[pid]
 
 
+def _listening(p) -> list[tuple[str, int]]:
+    try:
+        conns = p.net_connections(kind="inet")
+    except (*_ERRORS, AttributeError):
+        return []
+    return sorted({(c.laddr.ip, c.laddr.port) for c in conns
+                   if c.status == psutil.CONN_LISTEN and c.laddr}, key=lambda x: x[1])
+
+
 def find_llama_processes(procs=None) -> list[LlamaProcess]:
     found: list[LlamaProcess] = []
     for p in (procs if procs is not None else _iter_system_procs()):
@@ -69,6 +79,13 @@ def find_llama_processes(procs=None) -> list[LlamaProcess]:
             except _ERRORS:
                 env = {}
             args = parse_llama_args(argv or [name], env)
+            listen = _listening(p) if args.kind == "server" else []
+            if listen and args.sources.get("port") not in ("cli", "env"):
+                # the default port differs between llama.cpp versions: trust the socket
+                ip, port = listen[0]
+                args.port, args.sources["port"] = port, "socket"
+                if args.sources.get("host") not in ("cli", "env"):
+                    args.host = "127.0.0.1" if ip in ("0.0.0.0", "::") else ip
             try:
                 swap = int(p.memory_full_info().swap)
             except (*_ERRORS, AttributeError):
@@ -77,7 +94,7 @@ def find_llama_processes(procs=None) -> list[LlamaProcess]:
                 pid=p.pid, ppid=p.ppid(), exe_name=os.path.basename(argv[0]) if argv else name,
                 args=args, rss=int(p.memory_info().rss), swap=swap,
                 cpu_percent=float(p.cpu_percent(interval=None)), threads=int(p.num_threads()),
-                started=float(p.create_time()),
+                started=float(p.create_time()), listen_ports=[port for _, port in listen],
                 role={"server": "server", "cli": "cli", "bench": "bench"}.get(args.kind, "other")))
         except _ERRORS:
             continue
