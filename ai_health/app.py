@@ -12,6 +12,7 @@ from ai_health import __version__
 from ai_health.collectors.gpu import GpuCollector
 from ai_health.sampler import Sampler
 from ai_health.settings import load_settings, save_settings
+from ai_health.web import api
 from ai_health.web.server import make_server
 
 STATIC = Path(__file__).parent / "static"
@@ -42,13 +43,10 @@ def build_sampler(args, gpu=None) -> Sampler:
                    extra_servers=[parse_hostport(x) for x in args.extra_server])
 
 
-def build_explorer(args):
-    """Explorer service (Task 15); None until available."""
-    try:
-        from ai_health.explorer.service import ExplorerService
-    except ImportError:
-        return None
-    return ExplorerService()
+def build_explorer(settings):
+    from ai_health.explorer.service import ExplorerService
+
+    return ExplorerService(settings=settings, on_change=lambda: save_settings(settings))
 
 
 def main(argv: list[str] | None = None, stop_event: threading.Event | None = None,
@@ -56,17 +54,13 @@ def main(argv: list[str] | None = None, stop_event: threading.Event | None = Non
     args = build_parser().parse_args(argv)
     settings = load_settings()
     sampler = build_sampler(args, gpu)
-    explorer = build_explorer(args)
-    routes = None
-    if explorer is not None:
-        from ai_health.web import api
-
-        routes = api.all_routes() if hasattr(api, "all_routes") else None
-        if args.open:
-            try:
-                explorer.open(args.open)
-            except Exception as e:
-                print(f"ai-health: could not open {args.open}: {e}")
+    explorer = build_explorer(settings)
+    routes = api.all_routes()
+    if args.open:
+        try:
+            explorer.open(args.open)
+        except (OSError, ValueError) as e:
+            print(f"ai-health: could not open {args.open}: {e}")
     server, url, _ = make_server(sampler, explorer, STATIC, port=args.port, routes=routes)
     sampler.start()
     th = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.2},
@@ -95,8 +89,7 @@ def main(argv: list[str] | None = None, stop_event: threading.Event | None = Non
         sampler.stop()
         server.shutdown()
         server.server_close()
-        if explorer is not None:
-            explorer.close()
+        explorer.close()
         if not (args.no_window or args.browser):
             save_settings(settings)
         if hasattr(sampler.gpu, "close"):
