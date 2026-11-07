@@ -107,10 +107,10 @@ and gives a complete view of its weights.
   built llama.cpp; fall back to the PyPI `gguf`). PyGObject comes from the
   system (`/usr/lib/python3/dist-packages/gi`), so the env must see system
   site-packages.
-- Python environment (owner's decision): standalone `uv` installed to
-  `~/.local/bin`, project venv `ai-health/.venv` created with
-  `--system-site-packages` (for system PyGObject). This PC has no
-  `claude_env`; this venv is the app's only env here.
+- Python environment (owner's decision): the single env of this PC,
+  `~/Software/venv` (Python 3.14, created with uv `--system-site-packages`
+  for system PyGObject). Used for all work on this PC; never `claude_env`,
+  no per-project venv. `uv` is at `~/.local/bin/uv`.
 - No real GGUF model is downloaded on this machine yet. Tests must build
   tiny synthetic GGUF files with `gguf.GGUFWriter`; never require a real
   model.
@@ -240,7 +240,7 @@ polish pass, with screenshots before and after.
 
 ## Owner's answers to the review questions
 
-- Python env: project venv via uv (see Constraints).
+- Python env: the single PC env `~/Software/venv` (see Constraints).
 - Verification: download one small real GGUF (Q4_K_M, ≤ 2.5 GB) to
   `~/models` and check monitor + explorer end-to-end against a real
   `llama-server --metrics`. Acceptance = monitor shows correct tok/s, VRAM,
