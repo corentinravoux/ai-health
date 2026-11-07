@@ -23,7 +23,7 @@ def main(argv=None) -> int:
     ap.add_argument("--extra-server", action="append", default=[])
     ap.add_argument("--click", action="append", default=[], help="CSS selector to click before the shot")
     ap.add_argument("--fill", action="append", default=[], help="selector=text to type before the shot")
-    ap.add_argument("--js", action="append", default=[], help="JS to evaluate before the shot")
+    ap.add_argument("--js", action="append", default=[], help="JS to evaluate first (order: js, fill, click)")
     a = ap.parse_args(argv)
 
     cmd = [sys.executable, "-m", "ai_health", "--no-window", "--port", "0"]
@@ -31,7 +31,11 @@ def main(argv=None) -> int:
         cmd += ["--extra-server", x]
     if a.open:
         cmd += ["--open", a.open]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+    import os
+    import tempfile
+
+    env = dict(os.environ, XDG_CONFIG_HOME=tempfile.mkdtemp(prefix="ai-health-shot-"))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, env=env)
     try:
         line = proc.stdout.readline()
         url = line.strip().split(" on ", 1)[1]
@@ -50,16 +54,16 @@ def main(argv=None) -> int:
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
             page.goto(url)
             time.sleep(a.wait)
-            for sel in a.click:
-                page.click(sel)
-                time.sleep(0.8)
+            for js in a.js:
+                page.evaluate(js)
+                time.sleep(1.0)
             for item in a.fill:
                 sel, _, text = item.partition("=")
                 page.fill(sel, text)
                 time.sleep(1.2)
-            for js in a.js:
-                page.evaluate(js)
-                time.sleep(1.0)
+            for sel in a.click:
+                page.click(sel)
+                time.sleep(0.8)
             page.screenshot(path=a.out)
             browser.close()
         for e in errors:

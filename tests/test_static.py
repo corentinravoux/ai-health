@@ -33,7 +33,7 @@ def test_js_imports_resolve():
 def test_css_urls_resolve():
     for f in (STATIC / "css").glob("*.css"):
         for rel in URL_IN_CSS.findall(f.read_text()):
-            if rel.startswith("data:"):
+            if rel.startswith(("data:", "#")):
                 continue
             assert (f.parent / rel).resolve().is_file(), f"{f.name} -> missing {rel}"
 
