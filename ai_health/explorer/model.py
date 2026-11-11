@@ -87,14 +87,6 @@ def _field_value(f) -> object:
     return f.contents()
 
 
-def _first(meta: dict, *keys, default=None):
-    for k in keys:
-        v = meta.get(k)
-        if v is not None:
-            return v
-    return default
-
-
 def _as_int(v) -> int | None:
     if v is None:
         return None
@@ -134,6 +126,12 @@ def open_model(path: str | Path) -> ModelInfo:
     arch = str(meta.get("general.architecture") or "unknown")
     a = arch + "."
 
+    def raw(key: str) -> object:
+        """Hyperparameters come from the unsummarized field: ``meta`` turns
+        arrays over MAX_ARRAY (per-layer head counts on deep models) into text."""
+        f = readers[0].fields.get(key)
+        return f.contents() if f is not None and f.types else None
+
     tensors: list[TensorInfo] = []
     for si, r in enumerate(readers):
         for t in r.tensors:
@@ -143,9 +141,9 @@ def open_model(path: str | Path) -> ModelInfo:
                 n_bytes=int(t.n_bytes), n_params=int(t.n_elements), layer=c.layer,
                 component=c.component, role=c.role, shard=si, offset=int(t.data_offset)))
 
-    n_embd = _as_int(meta.get(a + "embedding_length")) or 0
-    n_head = _as_int(meta.get(a + "attention.head_count"))
-    head_dim = _as_int(_first(meta, a + "attention.key_length"))
+    n_embd = _as_int(raw(a + "embedding_length")) or 0
+    n_head = _as_int(raw(a + "attention.head_count"))
+    head_dim = _as_int(raw(a + "attention.key_length"))
     if head_dim is None and n_head:
         head_dim = n_embd // n_head
     vocab = len(vocab_field.data) if vocab_field is not None else None
@@ -154,17 +152,17 @@ def open_model(path: str | Path) -> ModelInfo:
         vocab = emb.shape[-1] if emb else None
     hp = HParams(
         arch=arch,
-        n_layer=_as_int(meta.get(a + "block_count")) or 0,
+        n_layer=_as_int(raw(a + "block_count")) or 0,
         n_embd=n_embd, n_head=n_head,
-        n_head_kv=_as_int(meta.get(a + "attention.head_count_kv")) or n_head,
+        n_head_kv=_as_int(raw(a + "attention.head_count_kv")) or n_head,
         head_dim=head_dim,
-        n_ff=_as_int(meta.get(a + "feed_forward_length")),
-        n_expert=_as_int(meta.get(a + "expert_count")) or 0,
-        n_expert_used=_as_int(meta.get(a + "expert_used_count")) or 0,
-        ctx_train=_as_int(meta.get(a + "context_length")),
+        n_ff=_as_int(raw(a + "feed_forward_length")),
+        n_expert=_as_int(raw(a + "expert_count")) or 0,
+        n_expert_used=_as_int(raw(a + "expert_used_count")) or 0,
+        ctx_train=_as_int(raw(a + "context_length")),
         vocab=vocab,
-        rope_base=float(meta[a + "rope.freq_base"]) if a + "rope.freq_base" in meta else None,
-        sliding_window=_as_int(meta.get(a + "attention.sliding_window")),
+        rope_base=float(raw(a + "rope.freq_base")) if raw(a + "rope.freq_base") is not None else None,
+        sliding_window=_as_int(raw(a + "attention.sliding_window")),
     )
     for r in readers:  # parsed arrays are huge (tokenizer); keep only the summary
         r.fields = {}

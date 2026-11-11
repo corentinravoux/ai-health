@@ -26,6 +26,14 @@ def test_open_dense(make_gguf):
     assert m.file_bytes == os.path.getsize(m.path)
 
 
+def test_long_per_layer_arrays_still_give_hparams(make_gguf):
+    # 80 layers: the metadata panel summarizes the array, the estimate must not
+    m = open_model(make_gguf(n_layer=80, n_embd=16, n_head=4, n_head_kv=2, n_ff=16,
+                             vocab=32, kv_heads_per_layer=True))
+    assert m.metadata["llama.attention.head_count_kv"] == "[array len=80]"
+    assert m.hparams.n_head_kv == 2
+
+
 def test_tensor_lookup_missing(make_gguf):
     m = open_model(make_gguf(n_layer=1))
     with pytest.raises(KeyError):
