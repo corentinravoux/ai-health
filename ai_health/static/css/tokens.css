@@ -1,0 +1,87 @@
+/*
+ * ai-health design tokens.
+ *
+ * Direction: a bench instrument for one machine. Graphite surfaces, thin
+ * rules, and one signal colour per quantity that follows that quantity
+ * everywhere (readout, chart trace, VRAM map, diagram overlay):
+ *   tokens/s  phosphor green   VRAM  amber   RAM  cyan
+ *   GPU       violet           CPU   sand    danger  red (only real danger)
+ * Type: Instrument Sans (UI, sentence case, no tracked caps) and Martian
+ * Mono with tabular figures for numbers only. The memorable element is the
+ * VRAM map (monitor) and the architecture diagram (explorer); the rest
+ * stays quiet. Contrast: --fg-dim on --panel ≥ 4.5:1 in both themes.
+ */
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("../vendor/fonts/InstrumentSans-var.woff2") format("woff2");
+  font-weight: 400 700;
+  font-stretch: 75% 100%;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Martian Mono";
+  src: url("../vendor/fonts/MartianMono-var.woff2") format("woff2");
+  font-weight: 300 700;
+  font-stretch: 75% 112.5%;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #101215;
+  --panel: #16191d;
+  --panel-2: #1c2025;
+  --panel-3: #232830;
+  --line: #2a2f36;
+  --line-strong: #3a414a;
+  --fg: #e8e6e1;
+  --fg-dim: #a3a7ad;
+  --fg-faint: #6f757d;
+
+  --tps: #8ee07a;
+  --vram: #f2b544;
+  --ram: #5cc8e0;
+  --gpu: #a993f5;
+  --cpu: #d9c7a0;
+  --danger: #f06a5c;
+  --warn: #e8d46a;
+  --other: #59616b;
+  --free: #1f2329;
+  --gpu-place: #f2b544;   /* placement overlay: GPU (amber, it is VRAM) */
+  --cpu-place: #d9c7a0;   /* placement overlay: CPU (sand, it is RAM/CPU) */
+
+  --font-ui: "Instrument Sans", system-ui, sans-serif;
+  --font-num: "Martian Mono", ui-monospace, monospace;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 14px;
+  --rail-w: 76px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --t-fast: 120ms;
+  --t-med: 240ms;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eceef1;
+  --panel: #ffffff;
+  --panel-2: #f5f6f8;
+  --panel-3: #e9ecef;
+  --line: #d6dbe0;
+  --line-strong: #b9c0c8;
+  --fg: #15181c;
+  --fg-dim: #4c535b;
+  --fg-faint: #7c838b;
+
+  --tps: #2c8a2a;
+  --vram: #b57309;
+  --ram: #0b7d96;
+  --gpu: #6748d4;
+  --cpu: #86704a;
+  --danger: #c9362a;
+  --warn: #8d7b05;
+  --other: #a8b0b8;
+  --free: #eef0f2;
+  --gpu-place: #c98411;
+  --cpu-place: #a08a62;
+}
