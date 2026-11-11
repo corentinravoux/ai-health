@@ -9,7 +9,7 @@ from ai_health.settings import Settings, load_settings, save_settings
 def test_parser_defaults():
     a = build_parser().parse_args([])
     assert a.browser is False and a.no_window is False and a.port == 0
-    assert a.history == 900 and a.open is None and a.extra_server == []
+    assert a.history is None and a.open is None and a.extra_server == []
 
 
 def test_parse_hostport():
@@ -66,3 +66,19 @@ def test_main_no_window_starts_and_stops(tmp_path, monkeypatch):
     stop.set()
     th.join(10)
     assert not th.is_alive()
+
+
+def test_history_from_settings_unless_given():
+    s = build_sampler(build_parser().parse_args([]), gpu=NoGpu(), settings=Settings(history_s=300))
+    assert s.history_s == 300
+    s = build_sampler(build_parser().parse_args(["--history", "60"]), gpu=NoGpu(), settings=Settings(history_s=300))
+    assert s.history_s == 60
+
+
+def test_drop_js_is_json_escaped():
+    from ai_health.desktop import drop_js
+
+    path = '/m/a "b" \\ é.gguf'
+    js = drop_js(path)
+    assert js == "window.aiHealthDropped && window.aiHealthDropped(" + json.dumps(path) + ")"
+    assert "\\u00e9" in js and "'" not in js

@@ -163,6 +163,30 @@ def viewers_launch(ctx, query, body):
         raise ApiError(409, str(e)) from None
 
 
+def settings_get(ctx, query, body):
+    s = ctx.settings
+    return 200, {"theme": s.theme if s else "dark", "history_s": s.history_s if s else 900}
+
+
+def settings_set(ctx, query, body):
+    """The desktop window runs in private mode (no localStorage), so UI
+    preferences are kept in the settings file instead."""
+    if ctx.settings is None:
+        raise ApiError(503, "settings unavailable")
+    theme = (body or {}).get("theme")
+    if theme not in ("dark", "light"):
+        raise ApiError(400, "theme must be 'dark' or 'light'")
+    ctx.settings.theme = theme
+    if ctx.save_settings:
+        ctx.save_settings(ctx.settings)
+    return settings_get(ctx, query, body)
+
+
+SETTINGS_ROUTES = {
+    ("GET", "/api/settings"): settings_get,
+    ("POST", "/api/settings"): settings_set,
+}
+
 EXPLORER_ROUTES = {
     ("POST", "/api/model/open"): model_open,
     ("POST", "/api/model/close"): model_close,

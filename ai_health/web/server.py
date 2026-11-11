@@ -122,7 +122,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(404, "unknown endpoint")
         body = None
         if method == "POST":
-            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._error(400, "bad Content-Length")
+            if n < 0:
+                return self._error(400, "bad Content-Length")
             if n > MAX_BODY:
                 return self._error(413, "body too large")
             try:
@@ -176,10 +181,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server(sampler, explorer, static_dir: Path, port: int = 0,
-                token: str | None = None, routes: dict | None = None):
+                token: str | None = None, routes: dict | None = None,
+                settings=None, save_settings=None):
     token = token or secrets.token_urlsafe(24)
     ctx = SimpleNamespace(sampler=sampler, explorer=explorer, static_dir=Path(static_dir),
-                          token=token, routes=dict(routes or api.ROUTES))
+                          token=token, routes={**api.SETTINGS_ROUTES, **(routes or api.ROUTES)},
+                          settings=settings, save_settings=save_settings)
     server = AppServer(("127.0.0.1", port), Handler, ctx)
     base_url = f"http://127.0.0.1:{server.server_address[1]}/?token={token}"
     return server, base_url, token

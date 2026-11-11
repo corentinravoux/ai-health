@@ -195,6 +195,11 @@ def estimate_vram(model: ModelInfo, args: LlamaArgs, placement: Placement,
     if hp.sliding_window:
         notes.append("sliding-window attention: KV estimate is an upper bound")
     weights = placement.gpu_weight_bytes
+    names = {t.name for t in model.tensors}
+    if "output.weight" not in names and "token_embd.weight" in names and placement.output_device == "GPU":
+        # tied embeddings: llama.cpp loads a second copy of token_embd for the output layer
+        weights += model.tensor("token_embd.weight").n_bytes
+        notes.append("tied output head: a copy of token_embd sits in VRAM")
     compute = max(512 * MiB, int(0.06 * weights)) if weights else 0
     notes.append("compute buffer is a rough allowance")
     total = weights + kv + compute

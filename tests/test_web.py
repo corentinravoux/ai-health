@@ -35,11 +35,19 @@ class FakeSampler:
 
 
 @pytest.fixture
-def srv(tmp_path):
+def saved():
+    return []
+
+
+@pytest.fixture
+def srv(tmp_path, saved):
     (tmp_path / "index.html").write_text("<!doctype html><title>ai-health</title>")
     (tmp_path / "js").mkdir()
     (tmp_path / "js" / "main.js").write_text("export {}")
-    server, base_url, token = make_server(FakeSampler(), None, tmp_path, port=0, token="tok")
+    from ai_health.settings import Settings
+
+    server, base_url, token = make_server(FakeSampler(), None, tmp_path, port=0, token="tok",
+                                          settings=Settings(), save_settings=lambda s: saved.append(s.theme))
     th = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     th.start()
     yield server, server.server_address[1], token
@@ -145,3 +153,24 @@ def test_stream_emits_events(srv):
             events.append(json.loads(line[6:]))
     assert [e["t"] for e in events] == [0.0, 1.0]
     c.close()
+
+
+def test_settings_get_and_set_theme(srv, saved):
+    _, port, _ = srv
+    assert json.loads(req(port, "/api/settings")[2])["theme"] == "dark"
+    status, _, body = req(port, "/api/settings", method="POST", body={"theme": "light"})
+    assert status == 200 and json.loads(body)["theme"] == "light" and saved == ["light"]
+    assert json.loads(req(port, "/api/settings")[2])["theme"] == "light"
+    assert req(port, "/api/settings", method="POST", body={"theme": "blue"})[0] == 400
+
+
+@pytest.mark.parametrize("length", ["-5", "abc"])
+def test_bad_content_length_is_400(srv, length):
+    _, port, _ = srv
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.putrequest("POST", "/api/settings", skip_host=True)
+    c.putheader("Host", f"127.0.0.1:{port}")
+    c.putheader("X-AI-Health-Token", "tok")
+    c.putheader("Content-Length", length)
+    c.endheaders()
+    assert c.getresponse().status == 400

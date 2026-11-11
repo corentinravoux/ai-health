@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ai_health.settings import Settings
@@ -25,6 +26,11 @@ class JsApi:
         return res[0] if res else None
 
 
+def drop_js(path: str) -> str:
+    """JS that hands a dropped file path to the page (JSON-escaped, ASCII only)."""
+    return f"window.aiHealthDropped && window.aiHealthDropped({json.dumps(path)})"
+
+
 def run_window(url: str, settings: Settings) -> None:
     """Blocks until the window is closed; updates ``settings`` width/height."""
     import webview
@@ -45,7 +51,7 @@ def run_window(url: str, settings: Settings) -> None:
             for f in files:
                 p = f.get("pywebviewFullPath")
                 if p:
-                    window.evaluate_js(f"window.aiHealthDropped && window.aiHealthDropped({p!r})")
+                    window.evaluate_js(drop_js(p))
                     break
         try:
             from webview.dom import DOMEventHandler
