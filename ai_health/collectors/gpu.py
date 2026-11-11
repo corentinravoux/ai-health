@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 MiB = 2**20
-SMI_ARGV = ["nvidia-smi", "--query-compute-apps=pid,used_memory",
+SMI_ARGV = ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_memory",
             "--format=csv,noheader,nounits"]
 
 
@@ -87,12 +87,20 @@ class GpuCollector:
         procs = [GpuProcess(pid, used) for pid, used in merged.items()]
         if not procs or all(p.used_bytes is not None for p in procs):
             return procs, "nvml" if procs else "none"
+        # nvidia-smi lists every GPU's processes: keep only this device's rows,
+        # otherwise a PID on two GPUs gets the last row's allocation on both
+        uuid = self._opt(nv.nvmlDeviceGetUUID, h)
+        if isinstance(uuid, bytes):
+            uuid = uuid.decode()
+        if not uuid:
+            return procs, "none"
         try:
             smi = {}
             for line in self._smi(SMI_ARGV).splitlines():
                 parts = [x.strip() for x in line.split(",")]
-                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                    smi[int(parts[0])] = int(parts[1]) * MiB
+                if (len(parts) == 3 and parts[0] == uuid
+                        and parts[1].isdigit() and parts[2].isdigit()):
+                    smi[int(parts[1])] = int(parts[2]) * MiB
         except Exception:
             return procs, "none"
         for p in procs:
