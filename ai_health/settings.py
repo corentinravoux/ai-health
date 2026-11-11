@@ -5,6 +5,8 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import tempfile
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,12 +47,27 @@ def load_settings(path: Path | None = None) -> Settings:
     return s
 
 
+_save_lock = threading.Lock()
+
+
 def save_settings(s: Settings, path: Path | None = None) -> None:
+    """Atomic write. HTTP handler threads can save at the same time (model
+    open, theme change), so each save gets its own temporary file."""
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(dataclasses.asdict(s), indent=2))
-    tmp.replace(path)
+    with _save_lock:
+        text = json.dumps(dataclasses.asdict(s), indent=2)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(text)
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
 
 def remember_model(s: Settings, model_path: str, keep: int = 8) -> None:
