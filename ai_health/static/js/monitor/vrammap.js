@@ -33,15 +33,24 @@ export function mount(root) {
       cells = Array.from({ length: n }, (_, i) => h("div", { class: "cell", "data-i": i }));
       grid.replaceChildren(...cells);
     }
+    // bytes come from this GPU's own process list; the all-GPU holders list
+    // only supplies names and the llama classification
+    const info = new Map((sample.vram_holders || []).map((hd) => [hd.pid, hd]));
     const holders = [];
-    let li = 0, oi = 0;
-    for (const hd of sample.vram_holders || []) {
-      holders.push({ ...hd, kind: hd.is_llama ? "llama" : "other",
-        color: hd.is_llama ? LLAMA_SHADES[li++ % LLAMA_SHADES.length] : OTHER_SHADES[oi++ % OTHER_SHADES.length] });
+    let li = 0, oi = 0, attributed = 0;
+    for (const p of [...(g.processes || [])].sort((a, b) => (b.used_bytes || 0) - (a.used_bytes || 0))) {
+      if (!p.used_bytes) continue;
+      attributed += p.used_bytes;
+      const hd = info.get(p.pid) || {};
+      const isLlama = Boolean(hd.is_llama);
+      holders.push({ pid: p.pid, name: hd.name || String(p.pid), bytes: p.used_bytes,
+        is_llama: isLlama, kind: isLlama ? "llama" : "other",
+        color: isLlama ? LLAMA_SHADES[li++ % LLAMA_SHADES.length] : OTHER_SHADES[oi++ % OTHER_SHADES.length] });
     }
     holders.sort((a, b) => (a.kind === b.kind ? b.bytes - a.bytes : a.kind === "llama" ? -1 : 1));
-    if (sample.vram_unattributed > 0) {
-      holders.push({ name: "Driver and unattributed", bytes: sample.vram_unattributed, kind: "unattributed", color: null });
+    const unattributed = Math.max(0, g.mem_used - attributed);
+    if (unattributed > 0) {
+      holders.push({ name: "Driver and unattributed", bytes: unattributed, kind: "unattributed", color: null });
     }
     // assign cells by cumulative rounding so totals stay honest
     let acc = 0, cursor = 0;
