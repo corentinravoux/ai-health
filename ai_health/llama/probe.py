@@ -31,6 +31,15 @@ def _urllib_fetch(url: str, timeout: float) -> tuple[int, bytes]:
         return e.code, e.read(65536) if e.fp else b""
 
 
+def _parse_slots(body: bytes) -> list[dict]:
+    """``/slots`` must be a list of slot objects; anything else (an error
+    object, ``[null]``) is a bad payload, not an empty or idle server."""
+    data = json.loads(body)
+    if not isinstance(data, list) or not all(isinstance(s, dict) for s in data):
+        raise ValueError("expected a JSON list of slot objects")
+    return data
+
+
 class ServerProbe:
     def __init__(self, host: str, port: int, timeout: float = 0.3, fetch: Fetch | None = None):
         if host in ("0.0.0.0", "", "::", "[::]"):
@@ -69,7 +78,7 @@ class ServerProbe:
         return self._get("/props", model, json.loads)
 
     def slots(self) -> ProbeResult:
-        return self._get("/slots", None, json.loads)
+        return self._get("/slots", None, _parse_slots)
 
     def metrics(self, model: str | None = None) -> ProbeResult:
         return self._get("/metrics", model, lambda b: parse_prometheus(b.decode()))
