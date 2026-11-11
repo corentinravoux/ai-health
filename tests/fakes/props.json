@@ -1,0 +1,3 @@
+{"default_generation_settings": {"n_ctx": 8192, "params": {"temperature": 0.8}},
+ "total_slots": 1, "model_path": "/home/u/models/demo.gguf", "chat_template": "{{ messages }}",
+ "build_info": "b9999-test", "modalities": {"vision": false, "audio": false}}
