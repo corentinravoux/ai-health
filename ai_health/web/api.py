@@ -100,12 +100,24 @@ def model_tensor(ctx, query, body):
         raise ApiError(404, f"no tensor named {name!r}") from None
 
 
-def _gpu_numbers(ctx) -> tuple[int | None, int | None]:
+def _gpu0(ctx) -> dict | None:
     devices = ((ctx.sampler.latest() or {}).get("gpu") or {}).get("devices") or []
-    if not devices:
+    return devices[0] if devices else None
+
+
+def _gpu_numbers(ctx) -> tuple[int | None, int | None]:
+    d = _gpu0(ctx)
+    if d is None:
         return None, None
-    d = devices[0]
     return d["mem_total"] - d["mem_used"], d["mem_total"]
+
+
+def _pid_bytes_on_gpu0(ctx, pid) -> int:
+    """What ``pid`` holds on the GPU the free-memory baseline describes; its
+    allocations on other GPUs would not be freed there."""
+    d = _gpu0(ctx) or {}
+    return sum(p.get("used_bytes") or 0 for p in d.get("processes") or []
+               if p.get("pid") == pid)
 
 
 def _args_from_dict(d: dict) -> LlamaArgs:
@@ -126,7 +138,7 @@ def model_placement(ctx, query, body):
             raise ApiError(404, f"no llama-server with pid {body['pid']}")
         args = _args_from_dict(srv["args"])
         if free is not None:
-            free += srv.get("vram_bytes") or 0  # the server's own weights would be freed
+            free += _pid_bytes_on_gpu0(ctx, body["pid"])  # its own weights would be freed
         source = f"pid {body['pid']}"
     elif isinstance(body.get("flags"), str):
         args = args_from_flags(body["flags"])
