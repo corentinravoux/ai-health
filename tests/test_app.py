@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.request
 
+import ai_health
 from ai_health.app import build_parser, build_sampler, main, parse_hostport
 from ai_health.settings import Settings, load_settings, save_settings
 
@@ -62,7 +63,7 @@ def test_main_no_window_starts_and_stops(tmp_path, monkeypatch):
     base, token = ready["url"].split("/?token=")
     r = urllib.request.Request(base + "/api/meta", headers={"X-AI-Health-Token": token})
     with urllib.request.urlopen(r, timeout=5) as resp:
-        assert json.loads(resp.read())["version"] == "0.1.0"
+        assert json.loads(resp.read())["version"] == ai_health.__version__
     stop.set()
     th.join(10)
     assert not th.is_alive()
