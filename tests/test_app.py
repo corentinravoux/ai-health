@@ -83,3 +83,24 @@ def test_drop_js_is_json_escaped():
     js = drop_js(path)
     assert js == "window.aiHealthDropped && window.aiHealthDropped(" + json.dumps(path) + ")"
     assert "\\u00e9" in js and "'" not in js
+
+
+def test_concurrent_settings_saves_do_not_collide(tmp_path):
+    path = tmp_path / "settings.json"
+    errors = []
+
+    def worker(theme):
+        try:
+            for _ in range(50):
+                save_settings(Settings(theme=theme), path)
+        except Exception as e:  # pragma: no cover - the failure being tested
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in ("dark", "light")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert load_settings(path).theme in ("dark", "light")
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
