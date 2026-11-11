@@ -21,7 +21,18 @@ export function mount(root) {
   const work = h("div", { class: "ex", hidden: true }, sum, tree, h("section", { class: "ex-center" }, place, dia, strip), insp);
   root.append(start, work);
 
-  const open = async (path) => {
+  // One open-and-fetch at a time: the server holds a single current model, so
+  // overlapping opens could pair one model's architecture with another's
+  // tensors. A request superseded while it waited in line is dropped.
+  let openGen = 0;
+  let openChain = Promise.resolve();
+  const open = (path) => {
+    const gen = ++openGen;
+    const run = openChain.then(() => (gen === openGen ? load(path) : undefined));
+    openChain = run.catch(() => {});
+    return run;
+  };
+  const load = async (path) => {
     const arch = await api.post("/api/model/open", { path });
     const tensors = await api.get("/api/model/tensors");
     store.set("tensors", tensors);
