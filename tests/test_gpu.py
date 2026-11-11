@@ -38,13 +38,27 @@ def test_falls_back_to_nvidia_smi():
 
     def smi(argv):
         calls.append(argv)
-        return "1234, 2048\n"
+        return "GPU-fake-0, 1234, 2048\n"
 
     [s] = GpuCollector(nvml=nv, smi_runner=smi).sample()
     assert s.processes[0].pid == 1234
     assert s.processes[0].used_bytes == 2048 * MiB
     assert s.proc_source == "nvidia-smi"
-    assert "--query-compute-apps=pid,used_memory" in calls[0]
+    assert "--query-compute-apps=gpu_uuid,pid,used_memory" in calls[0]
+
+
+def test_smi_fallback_is_scoped_to_each_gpu():
+    dev = dict(name="GPU", total=12288 * MiB, used=4096 * MiB, util=0, util_mem=0,
+               temp=40, power=50_000, limit=170_000, sm=1000, mem=5000)
+    nv = FakeNVML(devices=[dict(dev), dict(dev)],
+                  compute={0: [(1234, None)], 1: [(1234, None)]})
+
+    def smi(argv):  # the same PID on both GPUs, rows for every device
+        return "GPU-fake-0, 1234, 1000\nGPU-fake-1, 1234, 3000\n"
+
+    s0, s1 = GpuCollector(nvml=nv, smi_runner=smi).sample()
+    assert s0.processes[0].used_bytes == 1000 * MiB
+    assert s1.processes[0].used_bytes == 3000 * MiB
 
 
 def test_smi_failure_leaves_unknown():
