@@ -5,6 +5,7 @@ import threading
 
 import pytest
 
+import ai_health
 from ai_health.web.server import make_server
 
 
@@ -107,7 +108,7 @@ def test_history_bad_param_400(srv):
 def test_meta(srv):
     _, port, _ = srv
     meta = json.loads(req(port, "/api/meta")[2])
-    assert meta["version"] == "0.1.0" and meta["history_s"] == 900 and meta["interval"] == 1.0
+    assert meta["version"] == ai_health.__version__ and meta["history_s"] == 900 and meta["interval"] == 1.0
     assert meta["gpu_name"] == "RTX" and meta["vram_total"] == 12 and meta["ram_total"] == 16
 
 
