@@ -171,3 +171,26 @@ def test_tied_output_layer_device(make_gguf):
     m = open_model(make_gguf(n_layer=4, tied=True))
     assert compute_placement(m, args_from_flags("-ngl 99")).output_device == "GPU"
     assert compute_placement(m, args_from_flags("-ngl 0")).output_device == "CPU"
+
+
+def test_tied_output_duplicate_counted_in_vram(make_gguf):
+    # llama.cpp loads a second copy of token_embd into the (GPU) output buffer
+    m = open_model(make_gguf(n_layer=4, tied=True))
+    emb = m.tensor("token_embd.weight").n_bytes
+    a = args_from_flags("-ngl 99 -c 1024")
+    p = compute_placement(m, a)
+    e = estimate_vram(m, a, p, None)
+    assert e.weights == p.gpu_weight_bytes + emb
+    assert any("tied" in n for n in e.notes)
+    a0 = args_from_flags("-ngl 0 -c 1024")
+    assert estimate_vram(m, a0, compute_placement(m, a0), None).weights == 0
+
+
+def test_zero_layer_model(make_gguf):
+    from ai_health.explorer.architecture import build_architecture
+
+    m = open_model(make_gguf(n_layer=0))
+    a = build_architecture(m)
+    assert a["layers"] == [] and a["summary"]["n_layer_attn"] == 0
+    p = compute_placement(m, args_from_flags("-ngl 99"))
+    assert p.layers == []

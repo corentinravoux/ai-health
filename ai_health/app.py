@@ -30,16 +30,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--browser", action="store_true", help="open the UI in the default browser instead of a window")
     ap.add_argument("--no-window", action="store_true", help="only run the local server (prints its URL)")
     ap.add_argument("--port", type=int, default=0, help="local port (default: random)")
-    ap.add_argument("--history", type=int, default=900, help="seconds of history kept in memory")
+    ap.add_argument("--history", type=int, default=None,
+                    help="seconds of history kept in memory (default: settings, 900)")
     ap.add_argument("--open", metavar="MODEL.gguf", help="open this model in the explorer at start")
     ap.add_argument("--extra-server", metavar="HOST:PORT", action="append", default=[],
                     help="also probe this llama-server even if no local process is found (repeatable)")
     return ap
 
 
-def build_sampler(args, gpu=None) -> Sampler:
+def build_sampler(args, gpu=None, settings=None) -> Sampler:
+    history = args.history if args.history is not None else (settings.history_s if settings else 900)
     return Sampler(gpu if gpu is not None else GpuCollector(),
-                   history_s=args.history,
+                   history_s=history,
                    extra_servers=[parse_hostport(x) for x in args.extra_server])
 
 
@@ -53,7 +55,7 @@ def main(argv: list[str] | None = None, stop_event: threading.Event | None = Non
          on_ready=None, gpu=None) -> int:
     args = build_parser().parse_args(argv)
     settings = load_settings()
-    sampler = build_sampler(args, gpu)
+    sampler = build_sampler(args, gpu, settings)
     explorer = build_explorer(settings)
     routes = api.all_routes()
     if args.open:
@@ -61,7 +63,8 @@ def main(argv: list[str] | None = None, stop_event: threading.Event | None = Non
             explorer.open(args.open)
         except (OSError, ValueError) as e:
             print(f"ai-health: could not open {args.open}: {e}")
-    server, url, _ = make_server(sampler, explorer, STATIC, port=args.port, routes=routes)
+    server, url, _ = make_server(sampler, explorer, STATIC, port=args.port, routes=routes,
+                                 settings=settings, save_settings=save_settings)
     sampler.start()
     th = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.2},
                           name="http", daemon=True)
