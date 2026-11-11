@@ -122,3 +122,6 @@
 }
 
 .server.stopped { opacity: .7; }
+.server-body { display: flex; flex-direction: column; gap: var(--s3); }
+.server > .btn { margin-top: var(--s3); }
+.queue { font-size: 12px; margin-top: calc(-1 * var(--s2)); }

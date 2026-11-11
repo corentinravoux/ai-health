@@ -15,10 +15,12 @@ function setMode(mode) {
   document.body.dataset.mode = mode;
 }
 
-function setTheme(theme) {
+function setTheme(theme, { persist = false } = {}) {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem("ai-health-theme", theme); } catch { /* private mode */ }
   store.set("theme", theme);
+  // the desktop window runs in private mode: the settings file is the durable copy
+  if (persist) api.post("/api/settings", { theme }).catch(() => {});
 }
 
 function initShell() {
@@ -26,7 +28,7 @@ function initShell() {
     b.addEventListener("click", () => setMode(b.dataset.modeBtn));
   }
   document.getElementById("theme-btn").addEventListener("click", () => {
-    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light", { persist: true });
   });
   addEventListener("keydown", (e) => {
     if (e.target.closest("input, textarea, select")) return;
@@ -36,6 +38,7 @@ function initShell() {
   let theme = "dark";
   try { theme = localStorage.getItem("ai-health-theme") || "dark"; } catch { /* ignore */ }
   setTheme(theme);
+  api.get("/api/settings").then((st) => { if (st?.theme && st.theme !== theme) setTheme(st.theme); }).catch(() => {});
   store.on("conn", (state) => {
     const el = document.getElementById("conn");
     el.dataset.state = state;

@@ -13,17 +13,20 @@ export function mount(root) {
   root.append(h("div", { class: "place-row" }, h("h3", {}, "GPU placement"), select, flags, clear), result);
   let lastServers = null;
   let timer = null;
+  let seq = 0;  // only the latest request may update the overlay
 
   const run = async () => {
     const v = select.value;
     flags.hidden = v !== "flags";
-    if (!v || v === "none") { store.set("placement", null); result.replaceChildren(h("div", { class: "dim", style: { fontSize: "12.5px" } },
+    if (!v || v === "none") { seq++; store.set("placement", null); result.replaceChildren(h("div", { class: "dim", style: { fontSize: "12.5px" } },
       "Choose a running llama-server or type flags to see which layers land on the GPU.")); return; }
     const body = v === "flags" ? { flags: flags.value } : { pid: Number(v) };
+    const id = ++seq;
     try {
-      store.set("placement", await api.post("/api/model/placement", body));
+      const r = await api.post("/api/model/placement", body);
+      if (id === seq) store.set("placement", r);
     } catch (e) {
-      result.replaceChildren(h("div", { class: "insp-note" }, e.message));
+      if (id === seq) result.replaceChildren(h("div", { class: "insp-note" }, e.message));
     }
   };
   select.addEventListener("change", run);
@@ -40,6 +43,11 @@ export function mount(root) {
       ...servers.map((s) => h("option", { value: String(s.pid) }, `llama-server :${s.port}, ${basename(s.model)}`)),
       h("option", { value: "flags" }, "Type flags…"));
     if ([...select.options].some((o) => o.value === cur)) select.value = cur;
+    else if (cur && cur !== "none" && cur !== "flags") {
+      // the server this overlay came from has stopped: drop the overlay
+      select.value = "none";
+      run();
+    }
   };
   store.on("sample", fillServers);
   store.on("placementRequest", (req) => {

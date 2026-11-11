@@ -32,6 +32,8 @@ export function mount(root) {
       return c;
     }));
     const n = arch.layers.length;
+    root.hidden = n === 0;  // e.g. a multimodal projector (mmproj) file has no repeating layers
+    if (n === 0) return;
     axis.replaceChildren(h("span", {}, "0"), h("span", {}, String(Math.floor(n / 2))), h("span", {}, String(n - 1)));
     const counts = { GPU: 0, CPU: 0, MIXED: 0 };
     for (const l of place?.layers || []) counts[l.device]++;

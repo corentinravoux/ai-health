@@ -32,6 +32,7 @@ export function mount(root) {
 
   let full = { x: 0, y: 0, w: W, h: 800 };
   let vb = { ...full };
+  let userMoved = false;  // after a zoom or pan, resizes keep the user's view
   const applyVB = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   const fit = () => {
     const r = svg.getBoundingClientRect();
@@ -41,12 +42,22 @@ export function mount(root) {
     const hgt = w / aspect;
     const y0 = hgt >= full.h ? full.y - (hgt - full.h) / 2 : full.y - 6;
     vb = { x: full.x - 10, y: y0, w, h: hgt };
+    userMoved = false;
+    applyVB();
+  };
+  const keepView = () => {  // same centre and zoom, new aspect ratio
+    const r = svg.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
+    const hgt = vb.w / (r.width / r.height);
+    vb = { x: cx - vb.w / 2, y: cy - hgt / 2, w: vb.w, h: hgt };
     applyVB();
   };
   const zoom = (f, cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2) => {
     const w = Math.min(Math.max(vb.w * f, 120), full.w * 4);
     const k = w / vb.w;
     vb = { x: cx - (cx - vb.x) * k, y: cy - (cy - vb.y) * k, w, h: vb.h * k };
+    userMoved = true;
     applyVB();
   };
   fitBtn.onclick = fit;
@@ -57,6 +68,7 @@ export function mount(root) {
     if (!e.ctrlKey && !e.metaKey) {  // plain wheel scrolls, ctrl+wheel zooms
       vb.y += (e.deltaY / svg.getBoundingClientRect().height) * vb.h;
       vb.y = Math.max(full.y - vb.h * 0.5, Math.min(vb.y, full.y + full.h - vb.h * 0.5));
+      userMoved = true;
       applyVB();
       return;
     }
@@ -77,17 +89,18 @@ export function mount(root) {
     const r = svg.getBoundingClientRect();
     vb.x = drag.vb.x - ((e.clientX - drag.x) / r.width) * vb.w;
     vb.y = drag.vb.y - ((e.clientY - drag.y) / r.height) * vb.h;
+    userMoved = true;
     applyVB();
   });
   svg.addEventListener("pointerup", () => { drag = null; svg.classList.remove("panning"); });
-  new ResizeObserver(() => fit()).observe(root);
+  new ResizeObserver(() => (userMoved ? keepView() : fit())).observe(root);
 
   let lastKey = "";
   const render = () => {
     const arch = store.get("model");
     if (!arch) return;
     const place = store.get("placement");
-    const L = Math.min(store.get("layer") ?? 0, arch.layers.length - 1);
+    const L = Math.max(0, Math.min(store.get("layer") ?? 0, arch.layers.length - 1));
     const sel = store.get("selectedTensor");
     const idx = store.get("tensorIndex") || new Map();
     const device = place?.placement?.device || null;
@@ -184,8 +197,14 @@ function draw(arch, L, idx, device, sel, outputDevice = null) {
   y += 20;
 
   // -- block frame -----------------------------------------------------------
-  const frameTop = y;
   const block = [];
+  if (!arch.layers.length) {
+    // projector / adapter files have no repeating blocks
+    block.push(s("rect", { class: "d-frame", x: 30, y, width: W - 50, height: 60, rx: 16 }),
+      text(48, y + 35, "No repeating layers in this file (for example a multimodal projector)", "d-label"));
+    y += 86;
+  } else {
+  const frameTop = y;
   y += 46;
   const present = (gid) => (layer.groups[gid]?.tensors || []).length > 0;
   const seqTop = ["ffn_post_norm", "moe", "ffn_norm", "attn_post_norm", "mixer", "attn_norm"];
@@ -226,6 +245,7 @@ function draw(arch, L, idx, device, sel, outputDevice = null) {
   if (arch.block.hybrid) block.push(text(48, frameTop + 42, `hybrid model: this layer mixes with ${layer.mixer}`, "d-module-sub"));
   for (const jy of junctions) block.push(junction(jy));
   y = frameBottom + 26;
+  }
 
   // -- stem ----------------------------------------------------------------
   const stem = [];
