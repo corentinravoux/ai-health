@@ -97,6 +97,8 @@ class ThroughputTracker:
         self._slot_t: float | None = None
         self._slot_last: float | None = None
         self._window: deque[tuple[float, float]] = deque()
+        # live slot tokens not yet seen in the completed-request counter
+        self._uncommitted = 0.0
 
     def _tokens_last_min(self, t: float, delta: float) -> int:
         if delta > 0:
@@ -142,8 +144,15 @@ class ThroughputTracker:
             gen_out, source = gen, "metrics"
             if busy and not self._gen.changed and live is not None and live[0] is not None:
                 gen_out, source = live[0], "slots"
-            # count tokens once: live slot deltas when we have them, else counter deltas
-            delta = live[1] if live is not None else dgen
+            # count tokens once: live slot deltas, plus the part of the counter
+            # delta (finished requests) that the slots did not show between polls
+            if live is None:
+                delta = dgen
+            else:
+                self._uncommitted += live[1]
+                unseen = max(0.0, dgen - self._uncommitted)
+                self._uncommitted = max(0.0, self._uncommitted - dgen)
+                delta = live[1] + unseen
             return Throughput(
                 gen_tps=gen_out, prompt_tps=prompt, busy=bool(busy),
                 tokens_last_min=self._tokens_last_min(t, delta), source=source,

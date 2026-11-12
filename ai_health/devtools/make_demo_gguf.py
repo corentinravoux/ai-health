@@ -39,6 +39,7 @@ def make_gguf(
     ssm_layers: tuple[int, ...] = (),
     linear_attn_layers: tuple[int, ...] = (),
     name: str = "demo",
+    kv_heads_per_layer: bool = False,
 ) -> Path:
     """Write a synthetic GGUF and return the path of its first shard."""
     path = Path(path)
@@ -90,7 +91,10 @@ def make_gguf(
     writer.add_uint32(f"{arch}.embedding_length", n_embd)
     writer.add_uint32(f"{arch}.feed_forward_length", n_ff)
     writer.add_uint32(f"{arch}.attention.head_count", n_head)
-    writer.add_uint32(f"{arch}.attention.head_count_kv", n_head_kv)
+    if kv_heads_per_layer:  # one entry per layer, as hybrid/variable-GQA models store it
+        writer.add_array(f"{arch}.attention.head_count_kv", [n_head_kv] * n_layer)
+    else:
+        writer.add_uint32(f"{arch}.attention.head_count_kv", n_head_kv)
     writer.add_float32(f"{arch}.rope.freq_base", 10000.0)
     if n_expert:
         writer.add_uint32(f"{arch}.expert_count", n_expert)

@@ -111,3 +111,21 @@ def test_metrics_update_only_at_request_end_so_slots_give_live_rate():
     t = tr.update(3.0, M(1200, 22.1, proc=0), slots(0, busy=False))
     assert t.busy is False and t.source == "metrics"
     assert abs(t.gen_tps - 200 / 2.1) < 1e-9
+
+
+def test_request_finished_between_polls_still_counts_its_tokens():
+    # idle slots at both polls, but a whole request ran in between
+    tr = ThroughputTracker()
+    tr.update(0.0, M(1000, 20.0, proc=0), slots(0, busy=False))
+    t = tr.update(1.0, M(1200, 21.0, proc=0), slots(0, busy=False))
+    assert t.tokens_last_min == 200
+
+
+def test_tokens_seen_live_are_not_counted_again_at_request_end():
+    tr = ThroughputTracker()
+    tr.update(0.0, M(1000, 20.0, proc=1), slots(0))
+    tr.update(1.0, M(1000, 20.0, proc=1), slots(90))
+    tr.update(2.0, M(1000, 20.0, proc=1), slots(185))
+    # 185 seen live, the counter adds 200: only the 15 unseen tokens are new
+    t = tr.update(3.0, M(1200, 22.1, proc=0), slots(0, busy=False))
+    assert t.tokens_last_min == 200

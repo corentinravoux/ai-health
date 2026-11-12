@@ -78,3 +78,9 @@ def test_wildcard_host_probed_on_loopback():
     f = FakeFetch({"/health": (200, '{"status":"ok"}')})
     ServerProbe("0.0.0.0", 9000, fetch=f).health()
     assert f.urls[0][0].startswith("http://127.0.0.1:9000/")
+
+
+def test_slots_that_are_not_a_list_of_objects_are_errors():
+    for body in ('{"error": "slots disabled"}', "[null]", '[1, 2]'):
+        r = ServerProbe("127.0.0.1", 8080, fetch=FakeFetch({"/slots": (200, body)})).slots()
+        assert r.ok is False and r.status == "error", body

@@ -19,7 +19,11 @@ class FakeSampler:
 
     def latest(self):
         return {"t": 0.0, "servers": self.servers, "system": {"ram_total": 16 * GiB},
-                "gpu": {"devices": [{"name": "RTX", "mem_total": 12 * GiB, "mem_used": 7 * GiB}]}}
+                "gpu": {"devices": [
+                    {"name": "RTX", "mem_total": 12 * GiB, "mem_used": 7 * GiB,
+                     "processes": [{"pid": 42, "used_bytes": 3 * GiB}]},
+                    {"name": "RTX", "mem_total": 12 * GiB, "mem_used": 2 * GiB,
+                     "processes": [{"pid": 42, "used_bytes": 2 * GiB}]}]}}
 
     def history(self, s):
         return []
@@ -35,7 +39,7 @@ def setup(tmp_path, make_gguf):
     models_dir.mkdir()
     (models_dir / "a.gguf").write_bytes(model.read_bytes())
     svc = ExplorerService(search_dirs=[models_dir])
-    server_entry = {"pid": 42, "model": str(model), "role": "server", "vram_bytes": 3 * GiB,
+    server_entry = {"pid": 42, "model": str(model), "role": "server", "vram_bytes": 5 * GiB,
                     "args": {"ngl": 2, "fit": True, "ctx": 1024, "model": str(model)}}
     sampler = FakeSampler([server_entry])
     server, _, _ = make_server(sampler, svc, static, port=0, token="t", routes=api.all_routes())
@@ -107,7 +111,8 @@ def test_placement_from_pid_uses_server_args(setup):
     call(port, "POST", "/api/model/open", {"path": str(model)})
     status, p = call(port, "POST", "/api/model/placement", {"pid": 42})
     assert status == 200 and p["placement"]["ngl_effective"] == 2 and p["source"] == "pid 42"
-    # free VRAM for fitting = total - used + what the server itself holds
+    # free VRAM on GPU 0 = total - used + what the server itself holds there
+    # (not its 2 GiB on GPU 1)
     assert p["vram_free_for_model"] == (12 - 7 + 3) * GiB
     assert call(port, "POST", "/api/model/placement", {"pid": 7})[0] == 404
 

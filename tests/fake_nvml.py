@@ -48,6 +48,9 @@ class FakeNVML:
     def nvmlDeviceGetHandleByIndex(self, i):
         return i
 
+    def nvmlDeviceGetUUID(self, h):
+        return self.devices[h].get("uuid", f"GPU-fake-{h}")
+
     def nvmlDeviceGetName(self, h):
         return self.devices[h]["name"]
 
